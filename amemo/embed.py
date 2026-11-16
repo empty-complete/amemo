@@ -24,7 +24,7 @@ from pgvector import HalfVector
 from pgvector.psycopg import register_vector
 
 from .ids import uuid7
-from .search import SEARCH_TEXT_VERSION
+from .search import _FRESH_TEXT_HASH, SEARCH_TEXT_VERSION, _hash_params
 
 Target = str
 
@@ -310,3 +310,84 @@ def activate_model(conn: psycopg.Connection, model_id) -> dict:
         conn.execute("UPDATE embedding_model SET active = true WHERE id = %s", (model[0],))
         model = _model_row(conn, model[0])
     return _model_json(model)
+
+
+# --- смысловой поиск включён всегда: вектора досчитывает служба, а не человек командой ---
+
+KEEP_BATCH = 32                         # документов за проход: модель не занимает процессор надолго
+KEEP_LOCK = 0x616D656D00000002          # ключ pg_advisory_lock: один досчитывающий на базу («amemo» + 2)
+_NOT_FRESH = f"(e.revision_id IS NULL OR e.dims <> %(dims)s OR NOT ({_FRESH_TEXT_HASH}))"
+_STALE_FROM = ("FROM search_document d LEFT JOIN embedding e ON e.target = d.target "
+               "AND e.revision_id = d.revision_id AND e.model_id = %(model_id)s "
+               f"WHERE {_NOT_FRESH}")
+
+
+def _stale_params(model) -> dict:
+    return {"model_id": model[0], "dims": model[3], **_hash_params()}
+
+
+def _stale_documents(conn: psycopg.Connection, model, limit: int) -> list[tuple]:
+    """До limit текущих документов без свежего вектора модели. Отбор — в SQL: тексты остальных не читаются."""
+    return conn.execute(
+        f"SELECT d.target, d.record_id, d.revision_id, d.document, e.text_hash, e.dims {_STALE_FROM} "
+        "ORDER BY d.target, d.record_id LIMIT %(limit)s", {**_stale_params(model), "limit": limit}).fetchall()
+
+
+def _stale_count(conn: psycopg.Connection, model) -> int:
+    return conn.execute(f"SELECT count(*) {_STALE_FROM}", _stale_params(model)).fetchone()[0]
+
+
+def _kept(state: str, embedded: int = 0, missing: int = 0) -> dict:
+    return {"state": state, "embedded": embedded, "missing": missing}
+
+
+def keep(conn: psycopg.Connection, provider: EmbeddingProvider | None = None, *, batch: int = KEEP_BATCH) -> dict:
+    """Держать смысловой поиск включённым без человека; служба зовёт это по расписанию (service/app.py).
+
+    Активная модель есть — досчитать вектора новых и изменённых записей, до batch за вызов. Активной модели нет —
+    взять модель provider, если она считает на месте (provider по умолчанию ничего не скачивает: нужны уже лежащие
+    файлы модели), посчитать вектора пачками и, когда текущие документы покрыты целиком, сделать её активной — то же,
+    что amemo embed enable, только без загрузки.
+
+    Ответ — {"state", "embedded", "missing"}: embedded — посчитано за вызов, missing — сколько документов ещё без
+    вектора. state: on — канал работает; enabling — вектора считаются, модель ещё не активна; off — AMEMO_BACKEND
+    выключает канал или неизвестен; unavailable — модель не считает (нет пакета или файлов модели); foreign —
+    в базе активна другая модель, её не трогаем; busy — считает другой процесс."""
+    try:
+        selected = get_provider(provider)
+    except EmbeddingError:
+        return _kept("off")
+    if selected is None:
+        return _kept("off")
+    model = conn.execute("SELECT id, name, version, dims, backend, active, created_at FROM embedding_model "
+                         "WHERE active").fetchone()
+    described = (getattr(selected, "name", None), getattr(selected, "version", None),
+                 getattr(selected, "dims", None), getattr(selected, "backend", None))
+    if model is not None and tuple(model[1:5]) != described:
+        return _kept("foreign")
+    if not conn.execute("SELECT pg_try_advisory_lock(%s)", (KEEP_LOCK,)).fetchone()[0]:
+        return _kept("busy")
+    try:
+        if model is None:
+            try:
+                selected.embed(["amemo"])                  # считает ли модель на месте; нет — канал остаётся выключен
+            except EmbeddingError:
+                return _kept("unavailable")
+            model = _model_row(conn, register_model(conn, selected)["id"])
+        stale = _stale_documents(conn, model, batch)
+        if stale:
+            try:
+                vectors = selected.embed([row[3] for row in stale])
+            except EmbeddingError:
+                return _kept("unavailable", missing=_stale_count(conn, model))
+            _write_embeddings(conn, model, stale, vectors)
+        missing = _stale_count(conn, model)
+        active = model[5]
+        if not active and not missing:
+            try:
+                active = activate_model(conn, model[0])["active"]
+            except EmbeddingError:                         # запись появилась между подсчётом и включением
+                missing = _stale_count(conn, model)
+        return _kept("on" if active else "enabling", len(stale), missing)
+    finally:
+        conn.execute("SELECT pg_advisory_unlock(%s)", (KEEP_LOCK,))

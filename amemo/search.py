@@ -330,6 +330,27 @@ def _fts(conn: psycopg.Connection, query: str, **filters) -> list[dict]:
     return _lexical_channel(conn, query, "fts", **filters)
 
 
+ANY_WORDS = 32                     # слов запроса в запасном ходе: длинный вопрос не становится сотней условий
+
+
+def any_words(query: str) -> str | None:
+    """Запрос «любое из слов» для websearch_to_tsquery: слова через or. Меньше двух слов — None: запасной ход ничего
+    не добавит к обычному. Кавычки вокруг слова и минус перед ним — операторы websearch — убираются."""
+    words: list[str] = []
+    for word in query.split():
+        word = word.strip("\"'").lstrip("-")
+        if word and word.lower() != "or" and word not in words:
+            words.append(word)
+    return " or ".join(words[:ANY_WORDS]) if len(words) > 1 else None
+
+
+def _fts_any(conn: psycopg.Connection, query: str, **filters) -> list[dict] | None:
+    """Запасной ход полнотекстового канала: записи, где есть хотя бы одно слово запроса; выше — те, где слов больше
+    и они ближе друг к другу (ts_rank_cd). None — запрос из одного слова: ход неприменим."""
+    loose = any_words(query) if isinstance(query, str) else None
+    return None if loose is None else _lexical_channel(conn, loose, "fts", **filters)
+
+
 # Тот же preimage, что в embed.text_hash, но вычисляемый в SQL до отсечения топ-50.
 _FRESH_TEXT_HASH = (
     "e.text_hash = %(hash_prefix)s || encode(sha256("
@@ -420,6 +441,8 @@ RANKING_V1 = {
         "exact_fact": {"code_exact": 4, "code_prefix": 2, "fts": 1, "vector": 0.25},
         "similar": {"vector": 2, "fts": 0.5},
     },
+    # каналы, которые включаются, только когда основной ничего не дал: fts_any — «любое из слов» при пустом fts
+    "fallbacks": {"fts_any": 0.25},
 }
 
 

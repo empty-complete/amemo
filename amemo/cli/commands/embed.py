@@ -122,7 +122,7 @@ def run_enable(ctx, args) -> int:
             f"модель: {m['name']} v{m['version']} ({m['backend']}, {m['dims']}) — "
             + (f"скачана в {r['models_dir']}" if r["downloaded"] else f"из {r['models_dir']}"),
             f"посчитано векторов: {r['embedded']}; покрытие: {c['covered']} из {c['total']} документов",
-            "смысловой поиск включён; новые записи досчитывает повторный amemo embed enable",
+            "смысловой поиск включён; вектора новых записей служба досчитывает сама",
         ])
     ctx.emit(result, text)
     return 0

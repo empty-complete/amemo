@@ -7,6 +7,10 @@ psycopg_pool на запрос (autocommit — как db.connect: каждый c
 загрузки (.amemo-upload-*.part в корне AMEMO_DOCS) lifespan удаляет при запуске и затем раз в час фоновой задачей. /mcp — Streamable HTTP сервера MCP (amemo/service/mcp.py): его менеджер сессий
 lifespan запускает и останавливает вместе с пулом.
 
+Смысловой поиск включён всегда (embed.keep): фоновая задача через KEEP_START после запуска и затем раз в KEEP_EVERY
+досчитывает вектора новых и изменённых записей, а если активной модели нет, а файлы модели на месте, — включает её.
+Человеку для этого ничего делать не нужно; AMEMO_BACKEND=none выключает канал, как и раньше.
+
 Обновления (amemo/updates.py): Updater службы — app.state.updates. lifespan завершает переход после перезапуска
 (Updater.startup), затем фоновая задача проверяет релизы при старте и раз в CHECK_EVERY (автообновление — там же) и раз
 в TICK смотрит, не пора ли перезапуститься: стоит новая версия, нет запросов HTTP IDLE секунд (updates.Activity —
@@ -37,14 +41,18 @@ POOL_MIN, POOL_MAX = 1, 8
 POOL_TIMEOUT = 5.0        # с; дольше ждать соединения нет смысла — ответ 503
 OPEN_TIMEOUT = 10.0       # с; база не ответила при запуске — служба не стартует
 SWEEP_EVERY = 3600.0      # с; подборки и загрузки старше суток удаляются при запуске и раз в час
+KEEP_START = 15.0         # с после запуска до первого прохода embed.keep: сначала служба открывается и отвечает
+KEEP_EVERY = 30.0         # с между проходами, когда всё посчитано: новая запись получает вектор за полминуты
+KEEP_IDLE = 600.0         # с, когда считать нечем: канал выключен, нет файлов модели или в базе активна другая модель
 log = logging.getLogger("amemo.service")
 
 
 def create_app(settings: Settings, *, provider: embed.EmbeddingProvider | None = None,
-               updater: updates.Updater | None = None, update_loop: bool = True) -> Starlette:
+               updater: updates.Updater | None = None, update_loop: bool = True,
+               embed_loop: bool = True) -> Starlette:
     """Служба HTTP по настройкам; provider — эмбеддинги для смыслового канала (None — по AMEMO_BACKEND); updater —
     обновления (None — по виду установки этого процесса), update_loop — фоновая проверка и перезапуск (тесты
-    выключают её, чтобы звать шаги сами)."""
+    выключают её, чтобы звать шаги сами); embed_loop — фоновое досчитывание векторов (embed.keep)."""
     if not settings.dsn:
         raise SettingsError("база не задана: задайте AMEMO_DSN (или dsn в amemo.toml) и выполните amemo init")
     tokens = load_tokens(settings.tokens) if settings.tokens is not None else None
@@ -74,6 +82,8 @@ def create_app(settings: Settings, *, provider: embed.EmbeddingProvider | None =
                 tasks.start_soon(_sweeper, settings)
                 if update_loop:
                     tasks.start_soon(_updates, updater)
+                if embed_loop:
+                    tasks.start_soon(_embeddings, app)
                 try:
                     yield
                 finally:
@@ -139,6 +149,31 @@ async def _sweeper(settings: Settings) -> None:
     while True:
         await anyio.sleep(SWEEP_EVERY)
         await anyio.to_thread.run_sync(_sweep, settings)
+
+
+async def _embeddings(app: Starlette) -> None:
+    """Смысловой поиск включён всегда: проходы embed.keep, пока служба жива."""
+    await anyio.sleep(KEEP_START)
+    while True:
+        delay = await anyio.to_thread.run_sync(_keep_embeddings, app, abandon_on_cancel=True)
+        await anyio.sleep(delay)
+
+
+def _keep_embeddings(app) -> float:
+    """Один проход embed.keep; ответ — через сколько секунд следующий: сразу, пока остаются документы без вектора,
+    KEEP_EVERY, когда всё посчитано, KEEP_IDLE, когда считать нечем. Сбой базы или модели службу не роняет."""
+    try:
+        with app.state.pool.connection() as conn:
+            kept = embed.keep(conn, choose_provider(app.state))
+    except Exception as e:                                # noqa: BLE001 — фоновая задача переживает любой сбой прохода
+        log.warning("вектора смыслового поиска не досчитаны: %s: %s", type(e).__name__, e)
+        return KEEP_EVERY
+    if kept["embedded"]:
+        log.info("смысловой поиск: посчитано векторов %d, осталось %d (%s)",
+                 kept["embedded"], kept["missing"], kept["state"])
+    if kept["state"] in ("off", "unavailable", "foreign"):
+        return KEEP_IDLE
+    return 0.0 if kept["embedded"] and kept["missing"] else KEEP_EVERY
 
 
 def _preload(app: Starlette) -> None:

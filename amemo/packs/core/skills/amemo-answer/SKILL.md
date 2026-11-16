@@ -9,7 +9,9 @@ description: Answer a question from the amemo knowledge base in three steps (sea
 
 **Три шага.**
 1. **Найти.** `amemo_search` по марке или нескольким ключевым словам (не всем вопросом). Читай короткие карточки
-   выдачи, не открывай всё подряд. Запомни `retrieval_id`.
+   выдачи, не открывай всё подряд. Запомни `retrieval_id`. В ответе `semantic: unavailable` — поиск по смыслу
+   сейчас не работает: ищи по одному–трём словам, марке или номеру пункта, длинная фраза найдёт только записи
+   с частью её слов.
 2. **Прочитать.** `amemo_get` только для нужных записей; `amemo_card` — карточка сущности (свойства из атомов),
    `amemo_similar` и `amemo_timeline` — соседи и история, если первого мало.
 3. **Ответить.** Коротко, по сути вопроса, и у каждого утверждения — откуда оно: ссылка `atm:…`, документ и место
@@ -33,7 +35,9 @@ description: Answer a question from the amemo knowledge base in three steps (sea
 
 **Three steps.**
 1. **Find.** `amemo_search` by a code or a few keywords (not the whole question). Read the short result cards; do
-   not open everything. Keep the `retrieval_id`.
+   not open everything. Keep the `retrieval_id`. When the result says `semantic: unavailable`, semantic search is
+   off right now: search by one to three words, a code or a clause number — a long phrase only finds records that
+   share some of its words.
 2. **Read.** `amemo_get` only for the records you need; `amemo_card` for an entity card (properties from atoms),
    `amemo_similar` and `amemo_timeline` for neighbours and history when the first pass is not enough.
 3. **Answer.** Briefly, to the point, and every claim with where it comes from: the `atm:…` reference, the
