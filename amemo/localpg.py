@@ -7,7 +7,9 @@ scram-sha-256. Суперпользователь кластера — роль 
 правами 0600, файл удаляется сразу после initdb) и хранит в строке подключения amemo.toml.
 
 Запуск и остановка — pg_ctl (-w: ждать готовности); журнал сервера — <pg_data>/log/postgresql.log. На Windows pg_ctl
-отвязывает сервер от консоли сам: он живёт и после выхода вызвавшего процесса.
+запускает сервер через «cmd /c postgres …» и отвязывает его от вызвавшего процесса: сервер живёт и после его выхода.
+pg_ctl start идёт со своей скрытой консолью (CREATE_NO_WINDOW), а не без консоли (DETACHED_PROCESS): иначе cmd.exe
+открывал своё окно, и закрытие этого окна останавливало PostgreSQL вместе со службой amemo.
 """
 from __future__ import annotations
 
@@ -29,6 +31,7 @@ DATABASE = "amemo"
 EXTENSIONS = ("vector", "btree_gist")
 START_TIMEOUT = 90                 # с; первый старт на медленном диске Windows бывает долгим
 TOOLS = ("initdb", "pg_ctl", "postgres")
+CREATE_NO_WINDOW = 0x0800_0000         # subprocess.CREATE_NO_WINDOW есть только в Python для Windows
 
 
 def conf_lines(port: int) -> dict[str, str]:
@@ -187,8 +190,10 @@ class Cluster:
 
     def _run(self, argv: list, what: str, *, detach: bool = False) -> subprocess.CompletedProcess:
         kw = {}
-        if detach and WINDOWS:                    # сервер не должен умереть вместе с консолью вызвавшего
-            kw["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        if detach and WINDOWS:
+            # сервер не должен умереть вместе с консолью вызвавшего и не должен открывать свою: своя скрытая
+            # консоль (её наследуют cmd.exe и postgres, которых запускает pg_ctl) и своя группа — без Ctrl+C
+            kw["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
         try:
             # stdout сервера при start уходит в журнал (-l), поэтому вывод можно ждать без зависания
             done = subprocess.run([str(a) for a in argv], capture_output=not detach, text=True, encoding="utf-8",
