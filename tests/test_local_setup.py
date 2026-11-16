@@ -260,3 +260,21 @@ def test_setup_creates_cluster_base_and_config(run, env, tmp_path):
     finally:
         if cluster.exists:
             cluster.stop()
+
+
+def test_pg_ctl_start_gets_a_hidden_console_on_windows(monkeypatch, tmp_path):
+    """pg_ctl start на Windows — со своей скрытой консолью и своей группой процессов, а не без консоли: без неё
+    cmd.exe, которым pg_ctl запускает postgres, открывал окно, и закрытие окна останавливало PostgreSQL."""
+    seen = {}
+
+    def run(argv, **kw):
+        seen.update(argv=argv, flags=kw.get("creationflags"))
+        return localpg.subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(localpg, "WINDOWS", True)
+    monkeypatch.setattr(localpg.subprocess, "CREATE_NEW_PROCESS_GROUP", 0x0000_0200, raising=False)
+    monkeypatch.setattr(localpg.subprocess, "run", run)
+    cluster = localpg.Cluster(tmp_path / "bin", tmp_path / "data")
+    cluster._run(["pg_ctl", "start"], "pg_ctl start", detach=True)
+    assert seen["flags"] == 0x0000_0200 | 0x0800_0000          # CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
+    assert not seen["flags"] & 0x0000_0008                      # не DETACHED_PROCESS
