@@ -1,7 +1,10 @@
-"""Локальные эмбеддинги: проверка provider, покрытие текущих ревизий и смена модели."""
+"""Локальные эмбеддинги: проверка provider, покрытие текущих ревизий, смена модели и досчитывание службой."""
+import contextlib
+import functools
 import json
 import math
 import sys
+import threading
 import types
 
 import psycopg
@@ -323,3 +326,127 @@ def test_fastembed_concurrent_first_calls_create_model_once(monkeypatch):
         t.join()
     assert errors == [] and len(results) == 8
     assert len(created) == 1
+
+
+# --- смысловой поиск включён всегда: embed.keep и проход службы ---
+
+def enable(kb, provider):
+    model = embed.register_model(kb, provider)
+    embed.sync_embeddings(kb, model["id"], provider)
+    return embed.activate_model(kb, model["id"])
+
+
+def test_keep_embeds_new_records_of_the_active_model(kb, provider):
+    put_atom(kb)
+    model = enable(kb, provider)
+    put_atom(kb, "Бета", key="second")
+    assert embed.embedding_coverage(kb, model["id"])["missing"] == 1
+
+    assert embed.keep(kb, provider) == {"state": "on", "embedded": 1, "missing": 0}
+    assert embed.embedding_coverage(kb, model["id"])["complete"]
+    assert embed.keep(kb, provider) == {"state": "on", "embedded": 0, "missing": 0}
+
+
+def test_keep_embeds_a_changed_record_again(kb, provider):
+    revision = put_atom(kb)
+    model = enable(kb, provider)
+    revise_atom(kb, revision, "Альфа, новая редакция")
+
+    assert embed.keep(kb, provider) == {"state": "on", "embedded": 1, "missing": 0}
+    assert embed.embedding_coverage(kb, model["id"])["complete"]
+
+
+def test_keep_enables_the_model_by_itself_in_batches(kb, provider):
+    """Активной модели нет, а provider считает на месте: вектора идут пачками, модель включается на полном покрытии."""
+    for i in range(3):
+        put_atom(kb, f"Запись {i}", key=f"k{i}")
+
+    assert embed.keep(kb, provider, batch=2) == {"state": "enabling", "embedded": 2, "missing": 1}
+    assert kb.execute("SELECT count(*) FROM embedding_model WHERE active").fetchone()[0] == 0
+    assert embed.keep(kb, provider, batch=2) == {"state": "on", "embedded": 1, "missing": 0}
+    assert kb.execute("SELECT name FROM embedding_model WHERE active").fetchone()[0] == provider.name
+
+
+def test_keep_leaves_search_off_when_the_model_cannot_count(kb, provider):
+    """Нет файлов модели или пакета: канал остаётся выключен, в базе не появляется пустая модель."""
+    put_atom(kb)
+
+    def broken(texts):
+        raise embed.EmbeddingError("нет файлов модели")
+
+    provider._embed = broken
+    assert embed.keep(kb, provider) == {"state": "unavailable", "embedded": 0, "missing": 0}
+    assert kb.execute("SELECT count(*) FROM embedding_model").fetchone()[0] == 0
+
+
+def test_keep_does_not_touch_a_foreign_active_model(kb, provider):
+    put_atom(kb)
+    model = enable(kb, provider)
+    put_atom(kb, "Бета", key="second")
+    other = FakeProvider()
+    other.name = "other-text"
+
+    assert embed.keep(kb, other) == {"state": "foreign", "embedded": 0, "missing": 0}
+    assert embed.embedding_coverage(kb, model["id"])["missing"] == 1
+    assert kb.execute("SELECT count(*) FROM embedding_model").fetchone()[0] == 1
+
+
+def test_keep_is_off_when_the_backend_is_disabled(kb, provider, monkeypatch):
+    monkeypatch.setenv("AMEMO_BACKEND", "none")
+    put_atom(kb)
+
+    assert embed.keep(kb, provider) == {"state": "off", "embedded": 0, "missing": 0}
+    assert kb.execute("SELECT count(*) FROM embedding_model").fetchone()[0] == 0
+
+
+class OnePool:
+    """Пул из одного соединения — как app.state.pool у фоновой задачи службы."""
+
+    def __init__(self, conn):
+        self.conn = conn
+
+    @contextlib.contextmanager
+    def connection(self):
+        if self.conn is None:
+            raise psycopg.OperationalError("база недоступна")
+        yield self.conn
+
+
+def service_app(conn, provider):
+    state = types.SimpleNamespace(pool=OnePool(conn), provider=provider, provider_chosen=True,
+                                  provider_lock=threading.Lock())
+    return types.SimpleNamespace(state=state)
+
+
+def test_service_pass_counts_vectors_and_says_when_to_come_back(kb, provider, monkeypatch):
+    """Проход службы: пока остаются документы без вектора — следующий сразу; всё посчитано — через KEEP_EVERY."""
+    from amemo.service import app as service
+
+    put_atom(kb)
+    put_atom(kb, "Бета", key="second")
+    monkeypatch.setattr(embed, "keep", functools.partial(embed.keep, batch=1))
+    application = service_app(kb, provider)
+
+    assert service._keep_embeddings(application) == 0.0
+    assert kb.execute("SELECT count(*) FROM embedding_model WHERE active").fetchone()[0] == 0
+    assert service._keep_embeddings(application) == service.KEEP_EVERY
+    assert kb.execute("SELECT count(*) FROM embedding_model WHERE active").fetchone()[0] == 1
+    assert kb.execute("SELECT count(*) FROM embedding").fetchone()[0] == 2
+
+
+def test_service_pass_waits_long_when_there_is_nothing_to_count_with(kb, provider):
+    from amemo.service import app as service
+
+    put_atom(kb)
+
+    def broken(texts):
+        raise embed.EmbeddingError("нет файлов модели")
+
+    provider._embed = broken
+    assert service._keep_embeddings(service_app(kb, provider)) == service.KEEP_IDLE
+
+
+def test_service_pass_survives_a_database_failure(provider):
+    from amemo.service import app as service
+
+    assert service._keep_embeddings(service_app(None, provider)) == service.KEEP_EVERY

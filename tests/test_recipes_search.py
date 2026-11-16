@@ -393,3 +393,45 @@ def test_on_semantic_error_skip_degrades_to_lexical_channels(kb, provider, monke
     assert result["channels"]["reasons"] == {"vector": "backend_unknown"} and alpha in by_ref(result)
     with pytest.raises(ValueError, match="on_semantic_error"):
         search_recipe(kb, "exact_fact", "alpha", on_semantic_error="ignore")
+
+
+def test_exact_fact_falls_back_to_any_word_when_no_record_has_them_all(kb):
+    """Длинный вопрос: записи со всеми словами нет — находятся записи с частью слов, а не пусто."""
+    written = write(kb,
+                    atom("wind", "Ветровое давление на витраж"),
+                    atom("snow", "Снеговая нагрузка на козырёк"),
+                    atom("other", "Теплопроводность алюминия"))
+    wind, snow, other = (f"atm:{revision.record_id}" for revision in written.revisions)
+
+    result = search_recipe(kb, "exact_fact", "ветровое давление снеговая нагрузка Пермь")
+
+    assert {item["ref"] for item in result["items"]} == {wind, snow}
+    assert result["channels"]["used"] == ["code_exact", "code_prefix", "fts", "fts_any"]
+    assert result["channels"]["skipped"] == ["vector"]
+    assert all(match["channel"] == "fts_any" for item in result["items"] for match in item["matches"])
+    assert "fts_any" in result["channels"]["durations_ms"]
+
+
+def test_exact_fact_keeps_strict_matches_when_some_record_has_all_words(kb):
+    """Запасной ход не подмешивается: есть запись со всеми словами — отвечает обычный полнотекстовый канал."""
+    written = write(kb,
+                    atom("wind", "Ветровое давление на витраж"),
+                    atom("snow", "Снеговая нагрузка на козырёк"))
+    wind = f"atm:{written.revisions[0].record_id}"
+
+    result = search_recipe(kb, "exact_fact", "ветровое давление")
+
+    assert [item["ref"] for item in result["items"]] == [wind]
+    assert result["channels"]["used"] == ["code_exact", "code_prefix", "fts"]
+
+
+@pytest.mark.parametrize("query, expected", [
+    ("давление", None),
+    ("ветровое давление", "ветровое or давление"),
+    ('"ветровое давление" -снег or  снег', "ветровое or давление or снег"),
+    ("давление давление", None),
+])
+def test_any_words_query(query, expected):
+    from amemo import search
+
+    assert search.any_words(query) == expected

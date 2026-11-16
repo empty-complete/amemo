@@ -552,9 +552,11 @@ amemo embed status                   # active model, how many records have a vec
   (by default `~/.local/share/amemo/models`; `FASTEMBED_CACHE_PATH` works too). It asks first; where nobody can
   answer (`--json`, scripts, CI) pass `--yes`, otherwise nothing is downloaded and the exit code is 2. Then it
   registers the model in the database, computes a vector for every current record and makes the model active.
-- **New records.** A write does not compute its vector yet. Run `amemo embed enable` again now and then: it
-  downloads nothing and embeds only the records added or changed since. `amemo embed status` shows how many lack a
-  vector, and search results report the share as `embedding_coverage`.
+- **New records.** The running service computes them itself: within about half a minute a new or changed record
+  gets its vector. If the database has no active model but the model files are already on disk (a restored or moved
+  database), the service also switches the channel back on — it never downloads anything. Without a running service
+  run `amemo embed enable` again: it downloads nothing and embeds only the records added or changed since.
+  `amemo embed status` shows how many lack a vector, and search results report the share as `embedding_coverage`.
 - **Who enables.** Only a person: a model gets exit code 2 from `amemo embed enable`, since it downloads a model
   and changes the installation. `amemo embed status` is for everyone.
 - **Turning it off.** `AMEMO_BACKEND=none` turns the semantic channel off; lexical search keeps working and results

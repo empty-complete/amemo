@@ -103,10 +103,11 @@ def _timed(channel, function, durations):
 
 def _response(conn: psycopg.Connection, recipe: str, channels: dict, *, query: str, agent: str,
               activity, limit: int, include_record: bool, semantic: str, reasons: dict, model,
-              durations_ms: dict, useful: bool, log: bool, now, lang: str | None = None) -> dict:
+              durations_ms: dict, useful: bool, log: bool, now, lang: str | None = None,
+              weights: dict | None = None) -> dict:
     candidates = [row for rows in channels.values() if rows is not None for row in rows]
     multipliers = usefulness.multipliers(conn, candidates, now=now) if useful else None
-    ranked = search._rrf(channels, search.RANKING_V1["recipes"][recipe], limit=limit,
+    ranked = search._rrf(channels, weights or search.RANKING_V1["recipes"][recipe], limit=limit,
                          exact_fact=recipe == "exact_fact", durations_ms=durations_ms,
                          usefulness=multipliers)
     cards = search._enrich(conn, ranked["hits"], include_record=include_record, lang=lang)
@@ -339,7 +340,11 @@ def exact_fact(conn: psycopg.Connection, query: str, *, agent: str, activity=Non
     запроса (не та модель, нет fastembed, сбой модели, неизвестный AMEMO_BACKEND): raise — EmbeddingError, skip —
     смысловой канал пропускается с причиной в channels.reasons.vector, остальные каналы отвечают как обычно.
     lang — язык фрагмента находки (amemo.lang; None — ru, затем en); на поиск он не влияет: запрос идёт по всем
-    слотам."""
+    слотам.
+
+    Запасной ход: полнотекстовый канал требует все слова запроса сразу, и длинный вопрос часто не находит ничего.
+    Когда fts пуст, а слов в запросе больше одного, канал fts_any ищет записи хотя бы с одним из слов
+    (search._fts_any). Он появляется в channels.used, только если что-то нашёл: без находок ответ прежний."""
     filters = {"target": target, "kind": search._codes(kind, "kind"),
                "entity_class": search._codes(entity_class, "entity_class"), "statuses": statuses}
     durations = {}
@@ -349,6 +354,12 @@ def exact_fact(conn: psycopg.Connection, query: str, *, agent: str, activity=Non
         "fts": _timed("fts", lambda: search._fts(conn, query, **filters), durations),
         "vector": None,
     }
+    weights = search.RANKING_V1["recipes"]["exact_fact"]
+    if not channels["fts"]:
+        loose = _timed("fts_any", lambda: search._fts_any(conn, query, **filters), durations)
+        if loose:
+            channels["fts_any"] = loose
+            weights = {**weights, **search.RANKING_V1["fallbacks"]}
     model, selected, reason = _select(conn, provider, on_semantic_error)
     if selected is not None and not query.strip():
         reason = "empty_query"
@@ -362,7 +373,7 @@ def exact_fact(conn: psycopg.Connection, query: str, *, agent: str, activity=Non
                      limit=limit, include_record=include_record,
                      semantic="used" if channels["vector"] is not None else "unavailable",
                      reasons=reasons, model=model, durations_ms=durations, useful=usefulness, log=log, now=now,
-                     lang=lang)
+                     lang=lang, weights=weights)
 
 
 def _source_document(conn: psycopg.Connection, ref: str):
