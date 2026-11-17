@@ -10,6 +10,10 @@ Claude Code 2.1.283; у формата нет своего номера верс
 - PreCompact отвечает простым текстом: при коде 0 stdout становится указаниями к сводке сжатия; держать его
   короче 10 000 знаков на хук — длиннее Claude Code обрезает по пределу и ставит метку (в файл, как прочие
   длинные выводы, не уносит); additionalContext у PreCompact нет;
+- Stop (сверено 17.11.2026) получает ещё stop_hook_active — true, когда Claude Code уже продолжает разговор из-за
+  хука Stop; ответ {"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": …}} — замечание модели без
+  ошибки: разговор продолжается, чтобы она могла на него ответить. Подряд такие продолжения Claude Code сам
+  ограничивает; хук amemo напоминает один раз за сессию и молчит при stop_hook_active;
 - пустой stdout с кодом 0 — успех без добавки; код 2 блокирует событие, поэтому хук amemo всегда выходит с кодом 0.
 
 Правила amemo:
@@ -22,7 +26,12 @@ Claude Code 2.1.283; у формата нет своего номера верс
   не угадывается по имени папки: только напоминание.
 - Бюджет BUDGET на событие, statement_timeout соединения STATEMENT_TIMEOUT_MS. Любой сбой (нет AMEMO_DSN, база
   не отвечает, ошибка, превышен бюджет) — пустой ответ и строка в AMEMO_STATE/hooks.log; пользователь ничего не видит,
-  агент работает как без amemo.
+  агент работает как без amemo. Одно исключение — начало сессии: база отказала во входе сразу (приложение или служба
+  не запущены) — агент получает строку UNAVAILABLE, чтобы сказать об этом, а не упасть на первом инструменте.
+- Подсказка к запросу — только уверенная: число само по себе («8», «50», «2026») маркой не считается, записей не
+  больше PROMPT_HITS. Подсказка не по делу хуже молчания.
+- Конец ответа (Stop): в сессии была работа, а записи в amemo не было — одно напоминание записать выводы; что была
+  работа, видно по вызовам инструментов в журнале разговора (transcript_path, последние STOP_TAIL байт).
 """
 from __future__ import annotations
 
@@ -38,17 +47,23 @@ from ..portable import O_BINARY, home
 
 HOOKS_FORMAT = "claude-code-hooks/2026-11-09"     # дата сверки с документацией (см. описание модуля)
 DOCS = "https://code.claude.com/docs/en/hooks"
-EVENTS = ("SessionStart", "UserPromptSubmit", "PreCompact")
+EVENTS = ("SessionStart", "UserPromptSubmit", "PreCompact", "Stop")
 
 BUDGET = 1.2                    # с на событие со входом в базу; до 1,5 с разд. 6.1 — запас на запуск процесса
 CONNECT_TIMEOUT = 2             # с; меньше 2 libpq не принимает — бюджет всё равно обрывает ожидание раньше
 STATEMENT_TIMEOUT_MS = 1000
 PROJECT_ATOMS = 5               # атомов проекта в начале сессии
-PROMPT_HITS = 5                 # находок в подсказке к запросу
+PROMPT_HITS = 3                 # находок в подсказке к запросу
+BARE_CODE_MIN = 5               # знаков в марке без букв: «8», «50», «2026» — не марка, «54858» и «20.13330» — марка
 CODE_CANDIDATES = 8             # кусков запроса, похожих на марку, не больше
 LABEL_MAX = 160
 SUMMARY_MAX = 200               # суть рядом с названием: короткое название говорит о предмете, суть — о сказанном
 FTS_QUERY_MAX = 500             # знаков запроса в полнотекстовый канал
+STOP_TAIL = 4 * 1024 * 1024     # байт журнала разговора с конца: длинная сессия не съедает бюджет хука
+STOP_WORK_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")      # правка файлов — работа
+STOP_TOOL_CALLS = 8             # столько вызовов инструментов без правки файлов — тоже работа (поиск, разбор)
+STOP_MARKS_KEEP = 14 * 86400    # с; метки «в этой сессии уже напоминал» старше — долой
+_SESSION_ID = re.compile(r"[A-Za-z0-9_.-]{1,128}")
 
 STATUSES = ("verified", "auto_verified", "needs_review", "draft")     # порядок показа: проверенное раньше
 PROJECT_STATUSES = ("verified", "auto_verified")      # черновик проекта по имени папки не выбирается
@@ -62,6 +77,12 @@ REMINDER = (
     "В конце задачи запиши выводы (навык amemo-remember, amemo_submit) и отметь помогшие записи (amemo_helpful); "
     "то, что нельзя сохранять, пользователь оборачивает в <private>…</private> — это в память не попадает.",
 )
+SEMANTIC_OFF = "Поиск по смыслу сейчас выключен: ищи по одному–трём словам, марке или номеру пункта."
+UNAVAILABLE = ("Память amemo сейчас недоступна: база не отвечает (приложение или служба amemo не запущены). "
+               "Инструменты amemo_* не сработают; если память нужна для задачи, скажи об этом пользователю.")
+STOP = ("Перед завершением (amemo): если в этой работе появились выводы, которые пригодятся в другой сессии, "
+        "запиши 1–3 из них (навык amemo-remember, amemo_submit) и отметь записи, которые помогли (amemo_helpful). "
+        "Записывать нечего — скажи об этом одной строкой и завершай. Напоминание приходит один раз за сессию.")
 COMPACT = ("Перед сжатием (amemo): отдельным пунктом сводки перечисли выводы этой сессии, которые стоит записать "
            "в amemo (навык amemo-remember, amemo_submit), и записи amemo, которые помогли (их ссылки atm:/ent: — "
            "для amemo_helpful).")
@@ -116,14 +137,24 @@ def handle(event: str, raw: str, env: Mapping[str, str]) -> str:
         return ""
     if event == "PreCompact":
         return COMPACT                    # простой текст: указания к сводке сжатия, база не нужна
-    conn = _connect(dsn)
-    try:
-        if event == "SessionStart":
-            text = session_start(conn, data.get("cwd"))
+    if event == "Stop":
+        text = stop(data, env)            # журнал разговора и метка в AMEMO_STATE, база не нужна
+    else:
+        try:
+            conn = _connect(dsn)
+        except Exception as e:            # noqa: BLE001 — отказ во входе: psycopg.OperationalError и родня
+            if event != "SessionStart":
+                raise
+            log(env, event, f"{type(e).__name__}: {e}")
+            text = UNAVAILABLE
         else:
-            text = prompt_submit(conn, data.get("prompt"))
-    finally:
-        conn.close()
+            try:
+                if event == "SessionStart":
+                    text = session_start(conn, data.get("cwd"), env)
+                else:
+                    text = prompt_submit(conn, data.get("prompt"))
+            finally:
+                conn.close()
     if not text:
         return ""
     return json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}},
@@ -282,9 +313,19 @@ def project_atoms(conn, ref: str, record_id: str, limit: int = PROJECT_ATOMS) ->
         {"ref": ref, "id": record_id, "statuses": list(STATUSES), "limit": limit}).fetchall()
 
 
-def session_start(conn, cwd) -> str:
-    """Напоминание, как пользоваться amemo, и — если по папке нашёлся проект — до PROJECT_ATOMS его атомов."""
+def semantic_off(conn, env: Mapping[str, str] | None = None) -> bool:
+    """Поиск по смыслу выключен не по воле человека: активной модели в базе нет, а AMEMO_BACKEND его не запрещает."""
+    if (env or {}).get("AMEMO_BACKEND", "").strip().lower() == "none":
+        return False
+    return conn.execute("SELECT 1 FROM embedding_model WHERE active").fetchone() is None
+
+
+def session_start(conn, cwd, env: Mapping[str, str] | None = None) -> str:
+    """Напоминание, как пользоваться amemo; строка о выключенном поиске по смыслу (semantic_off); и — если по папке
+    нашёлся проект — до PROJECT_ATOMS его атомов."""
     lines = list(REMINDER)
+    if semantic_off(conn, env):
+        lines.append(SEMANTIC_OFF)
     root = project_root(cwd)
     found = find_project(conn, root.name) if root is not None and root.name else None
     if found is not None:
@@ -305,7 +346,10 @@ _PREFIX_WORD = re.compile(r"[A-ZА-ЯЁ]{1,6}")       # «СП», «ГОСТ», 
 
 
 def code_candidates(text: str) -> list[str]:
-    """Куски запроса для канала «марка целиком»: слова с цифрой, они же с прописным словом перед ними («ГОСТ 123»),
+    """Число без букв короче BARE_CODE_MIN — не марка («8», «50», «2026»): само по себе оно в запрос не идёт,
+    только вместе с прописным словом перед ним («СП 50»).
+
+    Куски запроса для канала «марка целиком»: слова с цифрой, они же с прописным словом перед ними («ГОСТ 123»),
     и весь запрос, если он короткий. Не больше CODE_CANDIDATES, без повторов."""
     words = [w.strip(".-–—") for w in _TOKEN.findall(text)]
     found = []
@@ -317,7 +361,8 @@ def code_candidates(text: str) -> list[str]:
             continue
         if i > 0 and _PREFIX_WORD.fullmatch(words[i - 1] or ""):
             found.append(f"{words[i - 1]} {word}")
-        found.append(word)
+        if any(ch.isalpha() for ch in word) or len(word) >= BARE_CODE_MIN:
+            found.append(word)
     return list(dict.fromkeys(found))[:CODE_CANDIDATES]
 
 
@@ -362,6 +407,77 @@ def prompt_submit(conn, prompt) -> str:
                            gists.get(ref)))
     lines.append("Запись целиком — amemo_get по ссылке; помогла — отметь amemo_helpful.")
     return "\n".join(lines)
+
+
+# --- Stop ---
+
+def session_work(path) -> tuple[bool, bool]:
+    """(была работа, была запись в amemo) по концу журнала разговора. Работа — правка файла (STOP_WORK_TOOLS) или
+    не меньше STOP_TOOL_CALLS вызовов инструментов; запись — вызов amemo_submit под любым именем сервера. Журнала
+    нет или он не читается — (False, False): хук молчит."""
+    if not isinstance(path, str) or not path.strip() or "\0" in path:
+        return False, False
+    try:
+        with open(path, "rb") as f:
+            size = f.seek(0, os.SEEK_END)
+            f.seek(max(0, size - STOP_TAIL))
+            lines = f.read().split(b"\n")
+    except OSError:
+        return False, False
+    if size > STOP_TAIL:
+        lines = lines[1:]                 # первая строка окна — обрывок
+    edits = calls = 0
+    recorded = False
+    for line in lines:
+        if b"tool_use" not in line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        message = entry.get("message") if isinstance(entry, dict) else None
+        content = message.get("content") if isinstance(message, dict) else None
+        for block in content if isinstance(content, list) else ():
+            name = block.get("name") if isinstance(block, dict) and block.get("type") == "tool_use" else None
+            if not isinstance(name, str):
+                continue
+            calls += 1
+            edits += name in STOP_WORK_TOOLS
+            recorded = recorded or name.endswith("amemo_submit")
+    return edits > 0 or calls >= STOP_TOOL_CALLS, recorded
+
+
+def _mark_reminded(env: Mapping[str, str], session: str) -> bool:
+    """Поставить метку «в этой сессии напоминал»; True — метка новая. Не удалось записать — False: лучше промолчать,
+    чем напоминать на каждом ответе. Заодно убирает метки старше STOP_MARKS_KEEP."""
+    try:
+        folder = _state(env) / "hooks"
+        folder.mkdir(parents=True, exist_ok=True)
+        now = datetime.now(timezone.utc).timestamp()
+        for old in folder.glob("stop-*"):
+            try:
+                if now - old.stat().st_mtime > STOP_MARKS_KEEP:
+                    old.unlink()
+            except OSError:
+                pass
+        os.close(os.open(folder / f"stop-{session}", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
+    except OSError:                       # FileExistsError — уже напоминал; прочее — нет доступа к папке состояния
+        return False
+    return True
+
+
+def stop(data: dict, env: Mapping[str, str]) -> str:
+    """Напоминание записать выводы — один раз за сессию и только если в ней была работа, а записи в amemo не было.
+    Claude Code уже продолжает из-за хука Stop (stop_hook_active) — пусто: второе напоминание подряд не нужно."""
+    if data.get("stop_hook_active"):
+        return ""
+    session = data.get("session_id")
+    if not isinstance(session, str) or not _SESSION_ID.fullmatch(session):
+        return ""
+    worked, recorded = session_work(data.get("transcript_path"))
+    if recorded or not worked:
+        return ""
+    return STOP if _mark_reminded(env, session) else ""
 
 
 # --- CLI ---

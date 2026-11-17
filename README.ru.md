@@ -645,13 +645,16 @@ http_headers = { "X-Amemo-Agent" = "model:codex" }
 | | Claude Code | Codex CLI |
 |---|---|---|
 | Сервер MCP | `claude mcp add --scope user` (или `~/.claude.json`); проект — `.mcp.json` | `[mcp_servers.amemo]` в `~/.codex/config.toml`; проект — `.codex/config.toml` |
-| Хуки | `SessionStart`, `UserPromptSubmit`, `PreCompact` в `settings.json` | `SessionStart`, `UserPromptSubmit` в `hooks.json` |
+| Хуки | `SessionStart`, `UserPromptSubmit`, `PreCompact`, `Stop` в `settings.json` | `SessionStart`, `UserPromptSubmit` в `hooks.json` |
 | Навыки | `~/.claude/skills/amemo-*`; проект — `.claude/skills/` | `~/.agents/skills/`; проект — `.agents/skills/`, и блок в `AGENTS.md` |
 
 - **Хуки.** `amemo hook SessionStart` добавляет 3–5 проверенных атомов о проекте (по имени корня git) и
-  напоминание; `UserPromptSubmit` — уверенные находки по запросу («сначала amemo»); `PreCompact` просит сводку
-  перечислить выводы, которые стоит записать. Хук читает базу напрямую, укладывается в 1,5 с и при любом сбое
-  отвечает пусто с кодом 0. Текст из памяти приходит в рамке как данные со статусом проверки, а не как указания.
+  напоминание; `UserPromptSubmit` — уверенные находки по запросу («сначала amemo»): не больше трёх, и число само
+  по себе маркой не считается; `PreCompact` просит сводку перечислить выводы, которые стоит записать; `Stop` один
+  раз за сессию напоминает записать выводы — только если в сессии была работа, а записи в amemo не было. В начале
+  агент также узнаёт, что поиск по смыслу выключен или что база отказывает во входе. Хук читает базу напрямую,
+  укладывается в 1,5 с и при любом другом сбое отвечает пусто с кодом 0. Текст из памяти приходит в рамке как
+  данные со статусом проверки, а не как указания.
 - **Навыки.** `amemo-remember` (записать 1–3 атома в конце задачи), `amemo-answer` (ответ по памяти со ссылками на
   источники), `amemo-verify` (смысловой проверяющий, уровень 5).
 - **Кто пишет.** Установщик задаёт `AMEMO_AS_MODEL` серверу MCP и хукам: агент пишет как `model:claude-code` или
@@ -676,8 +679,8 @@ Plugins → Add → Upload plugin**. Добавить плагин в аккау
 `claude plugin install`, остаётся только на этой машине.
 
 - **Что внутри.** То же, что ставит `amemo install claude-code`: сервер MCP `amemo` с полным путём к `amemo` этой
-  машины (`mcp --agent model:cowork`, `AMEMO_AS_MODEL=cowork`), хуки `SessionStart`, `UserPromptSubmit` и
-  `PreCompact` в форме exec (`hooks/hooks.json`), три навыка, команды `/amemo:status`, `/amemo:remember`,
+  машины (`mcp --agent model:cowork`, `AMEMO_AS_MODEL=cowork`), хуки `SessionStart`, `UserPromptSubmit`,
+  `PreCompact` и `Stop` в форме exec (`hooks/hooks.json`), три навыка, команды `/amemo:status`, `/amemo:remember`,
   `/amemo:search`, `/amemo:verify` и помощник `verifier`. С приложением amemo для Windows путь — его запускатель
   `%LOCALAPPDATA%\amemo\bin\amemo.exe`, он не меняется с обновлениями. Хуки плагина Cowork загружает и в облачных
   сессиях, где `amemo` нет.
