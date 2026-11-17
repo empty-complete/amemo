@@ -14,12 +14,14 @@ from pathlib import Path
 
 import pytest
 
-from amemo import cli, db, records
+from amemo import cli, db, embed, records
 from amemo.agents import hooks
 from amemo.records import Item
+from conftest import FakeProvider
 
 AGENT = "model:test"
 ROOT = Path(__file__).resolve().parent.parent
+START = "\n".join((*hooks.REMINDER, hooks.SEMANTIC_OFF))     # активной модели в тестовой базе нет
 
 
 @pytest.fixture
@@ -102,10 +104,9 @@ def test_session_start_without_project_gives_only_the_reminder(kb, env, tmp_path
     records.commit(kb, [project("alpha", "Альфа"), atom("a1", project="@alpha")], agent=AGENT)
     root = git_folder(tmp_path, "beta")
     out = hooks.run("SessionStart", event("SessionStart", source="startup", cwd=str(root)), env)
-    assert context(out, "SessionStart") == "\n".join(hooks.REMINDER)
+    assert context(out, "SessionStart") == START
     # без cwd — тоже только напоминание
-    assert context(hooks.run("SessionStart", event("SessionStart", cwd=None), env), "SessionStart") == \
-        "\n".join(hooks.REMINDER)
+    assert context(hooks.run("SessionStart", event("SessionStart", cwd=None), env), "SessionStart") == START
 
 
 def test_project_found_by_exact_label_and_by_normalized_key(kb, env, tmp_path):
@@ -145,8 +146,7 @@ def test_unreadable_folder_keeps_the_reminder(kb, env, tmp_path, monkeypatch):
 
     monkeypatch.setattr(Path, "exists", denied)
     assert hooks.project_root(str(tmp_path)) is None
-    assert context(hooks.run("SessionStart", event("SessionStart", cwd=str(tmp_path)), env), "SessionStart") == \
-        "\n".join(hooks.REMINDER)
+    assert context(hooks.run("SessionStart", event("SessionStart", cwd=str(tmp_path)), env), "SessionStart") == START
 
 
 def test_label_cannot_close_the_frame_or_forge_a_tag(kb, env, tmp_path):
@@ -259,7 +259,8 @@ def test_without_dsn_the_answer_is_empty_with_code_0_and_a_log_line(tmp_path, mo
 def test_any_failure_gives_code_0_and_an_empty_answer(env, tmp_path, monkeypatch, capsys):
     bad = {**env, "AMEMO_DSN": "postgresql://nobody@127.0.0.1:1/none"}
     cases = [(["hook", "SessionStart"], "{не json", env), (["hook", "UserPromptSubmit"], "[1, 2]", env),
-             (["hook", "Stop"], event("Stop"), env), (["hook", "SessionStart"], event("SessionStart"), bad),
+             (["hook", "Notification"], event("Notification"), env),
+             (["hook", "UserPromptSubmit"], event("UserPromptSubmit", prompt="ВН-45"), bad),
              (["hook", "UserPromptSubmit"], event("UserPromptSubmit", prompt="ВН-45"),
               {**env, "AMEMO_AS_MODEL": "Не Так"})]
     for argv, stdin, environ in cases:
@@ -267,7 +268,14 @@ def test_any_failure_gives_code_0_and_an_empty_answer(env, tmp_path, monkeypatch
         assert cli.main(argv, env=environ) == 0, argv
         assert capsys.readouterr().out == "", argv
     log = hooks_log(env)
-    assert "не JSON" in log and "нужен объект JSON" in log and "'Stop'" in log and "OperationalError" in log
+    assert "не JSON" in log and "нужен объект JSON" in log and "'Notification'" in log and "OperationalError" in log
+
+
+def test_session_start_says_when_the_database_refuses_the_connection(env):
+    """Приложение или служба не запущены: агент узнаёт об этом в начале, а не на первом инструменте."""
+    bad = {**env, "AMEMO_DSN": "postgresql://nobody@127.0.0.1:1/none"}
+    assert context(hooks.run("SessionStart", event("SessionStart"), bad), "SessionStart") == hooks.UNAVAILABLE
+    assert "OperationalError" in hooks_log(bad)
 
 
 def test_any_hook_call_shape_gives_code_0_and_an_empty_answer(env, monkeypatch, capsys):
@@ -309,3 +317,80 @@ def test_prompt_line_carries_the_gist_after_a_short_label(kb, env):
     text = context(out, "UserPromptSubmit")
     assert (f"- {refs['@gist']} — «Кронштейн ВН-47» (fact; не проверено): "
             "Кронштейн держится на одном анкере М10.") in text
+
+
+def test_session_start_is_quiet_about_semantic_search_when_it_works_or_is_switched_off(kb, env):
+    off = {**env, "AMEMO_BACKEND": "none"}
+    assert context(hooks.run("SessionStart", event("SessionStart", cwd=None), off), "SessionStart") == \
+        "\n".join(hooks.REMINDER)
+    provider = FakeProvider()
+    embed.activate_model(kb, embed.register_model(kb, provider)["id"])
+    assert context(hooks.run("SessionStart", event("SessionStart", cwd=None), env), "SessionStart") == \
+        "\n".join(hooks.REMINDER)
+
+
+def test_a_bare_number_is_not_a_code():
+    text = "в корпусе 8 поставили 35 узлов по СП 50 и F50.0102, ГОСТ 54858 от 2026 года, 20.13330"
+    assert hooks.code_candidates(text) == ["СП 50", "F50.0102", "ГОСТ 54858", "54858", "20.13330"]
+
+
+def test_prompt_with_bare_numbers_gives_no_hint(kb, env):
+    """Числа из обычной фразы не тянут записи с такими же короткими кодами; подсказок не больше PROMPT_HITS."""
+    records.commit(kb, [atom("t3", codes=["3"]), atom("k8", codes=["8"]), atom("y", codes=["2026"])], agent=AGENT)
+    prompt = "в корпусе 8 на листе 3 поправили узел, это было в 2026 году, посмотри ещё раз весь интерфейс целиком"
+    assert hooks.run("UserPromptSubmit", event("UserPromptSubmit", prompt=prompt), env) == ""
+    written = records.commit(kb, [atom(f"m{i}", codes=["ВН-45"]) for i in range(5)], agent=AGENT)
+    text = context(hooks.run("UserPromptSubmit", event("UserPromptSubmit", prompt="Что с ВН-45 в корпусе 8?"), env),
+                   "UserPromptSubmit")
+    assert sum(ref in text for ref in written.refs.values()) == hooks.PROMPT_HITS == 3
+
+
+# --- Stop ---
+
+def transcript(tmp_path, *tools, name="session.jsonl") -> str:
+    lines = [json.dumps({"type": "user", "message": {"role": "user", "content": "сделай"}}, ensure_ascii=False)]
+    lines += [json.dumps({"type": "assistant", "message": {"role": "assistant", "content": [
+        {"type": "tool_use", "id": f"t{i}", "name": tool, "input": {}}]}}) for i, tool in enumerate(tools)]
+    path = tmp_path / name
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return str(path)
+
+
+def test_stop_reminds_once_when_the_session_worked_and_recorded_nothing(env, tmp_path):
+    path = transcript(tmp_path, "Read", "Edit")
+    first = hooks.run("Stop", event("Stop", transcript_path=path, stop_hook_active=False), env)
+    assert context(first, "Stop") == hooks.STOP
+    assert hooks.run("Stop", event("Stop", transcript_path=path, stop_hook_active=False), env) == ""
+    other = hooks.run("Stop", event("Stop", transcript_path=path, session_id="s2"), env)
+    assert context(other, "Stop") == hooks.STOP           # у другой сессии — своё напоминание
+    assert hooks_log(env) == ""
+
+
+@pytest.mark.parametrize("tools, active", [
+    (("Read", "Grep"), False),                                      # работы не было
+    (("Edit", "mcp__amemo__amemo_submit"), False),                  # выводы уже записаны
+    (("Edit", "mcp__plugin_amemo_amemo__amemo_submit"), False),     # то же, сервер поставлен плагином
+    (("Edit",), True),                                              # Claude Code уже продолжает из-за хука Stop
+])
+def test_stop_is_silent(env, tmp_path, tools, active):
+    path = transcript(tmp_path, *tools)
+    assert hooks.run("Stop", event("Stop", transcript_path=path, stop_hook_active=active), env) == ""
+    assert not (Path(env["AMEMO_STATE"]) / "hooks" / "stop-s1").exists()
+
+
+def test_stop_counts_many_tool_calls_as_work_and_ignores_a_missing_transcript(env, tmp_path):
+    assert hooks.run("Stop", event("Stop"), env) == ""                       # журнала /tmp/t.jsonl нет
+    assert hooks.run("Stop", event("Stop", transcript_path=None), env) == ""
+    assert hooks.run("Stop", event("Stop", session_id="../x", transcript_path=transcript(tmp_path, "Edit")), env) == ""
+    path = transcript(tmp_path, *["Read"] * hooks.STOP_TOOL_CALLS, name="many.jsonl")
+    assert context(hooks.run("Stop", event("Stop", transcript_path=path), env), "Stop") == hooks.STOP
+
+
+def test_stop_reads_only_the_tail_of_a_long_transcript(env, tmp_path, monkeypatch):
+    """Длинная сессия не съедает бюджет: читается конец журнала, обрывок первой строки окна отбрасывается."""
+    path = Path(transcript(tmp_path, "mcp__amemo__amemo_submit", *["Read"] * 40, "Edit"))
+    monkeypatch.setattr(hooks, "STOP_TAIL", 600)
+    assert path.stat().st_size > 600
+    assert hooks.session_work(str(path)) == (True, False)
+    monkeypatch.setattr(hooks, "STOP_TAIL", 10 ** 6)
+    assert hooks.session_work(str(path)) == (True, True)

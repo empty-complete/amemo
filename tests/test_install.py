@@ -198,7 +198,7 @@ def test_claude_project_writes_mcp_json_settings_and_skills(home, env, project, 
     assert servers["db"] == {"command": "db-mcp"} and servers["amemo"]["env"] == {"AMEMO_AS_MODEL": "claude-code"}
     assert servers["amemo"]["command"] == "amemo"                    # в проекте — без пути этой машины
     ours = amemo_hooks(read_json(project / ".claude" / "settings.json"))
-    assert sorted(ours) == ["PreCompact", "SessionStart", "UserPromptSubmit"]
+    assert sorted(ours) == ["PreCompact", "SessionStart", "Stop", "UserPromptSubmit"]
     assert all(h[0]["command"] == f"AMEMO_AS_MODEL=claude-code amemo hook {e}" for e, h in ours.items())
     assert any("PATH агента" in note for note in report.notes)
     assert str(Path(sys.executable).parent) not in (project / ".mcp.json").read_text(encoding="utf-8")

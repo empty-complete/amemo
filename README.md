@@ -651,13 +651,16 @@ http_headers = { "X-Amemo-Agent" = "model:codex" }
 | | Claude Code | Codex CLI |
 |---|---|---|
 | MCP server | `claude mcp add --scope user` (or `~/.claude.json`); project — `.mcp.json` | `[mcp_servers.amemo]` in `~/.codex/config.toml`; project — `.codex/config.toml` |
-| Hooks | `SessionStart`, `UserPromptSubmit`, `PreCompact` in `settings.json` | `SessionStart`, `UserPromptSubmit` in `hooks.json` |
+| Hooks | `SessionStart`, `UserPromptSubmit`, `PreCompact`, `Stop` in `settings.json` | `SessionStart`, `UserPromptSubmit` in `hooks.json` |
 | Skills | `~/.claude/skills/amemo-*`; project — `.claude/skills/` | `~/.agents/skills/`; project — `.agents/skills/`, plus a block in `AGENTS.md` |
 
 - **Hooks.** `amemo hook SessionStart` adds 3–5 verified atoms about the project (by the git root name) and a
-  reminder; `UserPromptSubmit` adds confident hits for the prompt («amemo first»); `PreCompact` asks the summary
-  to list findings worth saving. A hook reads the database directly, fits in 1.5 s, and on any failure answers
-  nothing with exit code 0. Text from memory comes framed as data with its review status, not as instructions.
+  reminder; `UserPromptSubmit` adds confident hits for the prompt («amemo first»): at most three, and a bare
+  number is not taken for a code; `PreCompact` asks the summary to list findings worth saving; `Stop` reminds once
+  per session to record findings — only when the session did work and wrote nothing to amemo. At the start the
+  agent also learns that semantic search is off, or that the database refuses the connection. A hook reads the
+  database directly, fits in 1.5 s, and on any other failure answers nothing with exit code 0. Text from memory
+  comes framed as data with its review status, not as instructions.
 - **Skills.** `amemo-remember` (write 1–3 atoms at the end of a task), `amemo-answer` (answer from memory with
   sources), `amemo-verify` (the semantic reviewer, level 5).
 - **Who writes.** The installer sets `AMEMO_AS_MODEL` for the MCP server and the hooks, so the agent writes as
@@ -684,7 +687,7 @@ Add → Upload plugin**. Claude can't add a plugin to your account from the comm
 
 - **What's inside.** The same set as `amemo install claude-code`: the MCP server `amemo` with this machine's full
   path to `amemo` (`mcp --agent model:cowork`, `AMEMO_AS_MODEL=cowork`), the hooks `SessionStart`,
-  `UserPromptSubmit` and `PreCompact` in exec form (`hooks/hooks.json`) and the three skills. With the amemo app for
+  `UserPromptSubmit`, `PreCompact` and `Stop` in exec form (`hooks/hooks.json`) and the three skills. With the amemo app for
   Windows the path is its launcher `%LOCALAPPDATA%\amemo\bin\amemo.exe`, which does not change with updates.
   Cowork loads plugin hooks in cloud sessions too, where `amemo` doesn't exist.
 - **Where it works.** The local MCP server runs in Cowork sessions on your computer in the Claude app. Cloud

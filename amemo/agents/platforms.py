@@ -83,7 +83,7 @@ def layout(agent: str, env: Mapping[str, str], project: Path | None = None, *,
         if project is not None:
             return Layout(agent, "claude-code", CLAUDE_FORMAT, project, mcp_json=project / ".mcp.json",
                           hooks_json=project / ".claude" / "settings.json",
-                          hook_events=("SessionStart", "UserPromptSubmit", "PreCompact"),
+                          hook_events=("SessionStart", "UserPromptSubmit", "PreCompact", "Stop"),
                           skills=project / ".claude" / "skills", hook_form=form,
                           notes=("Claude Code спросит одобрения сервера amemo из .mcp.json проекта",))
         notes = ()
@@ -96,7 +96,7 @@ def layout(agent: str, env: Mapping[str, str], project: Path | None = None, *,
             base, user_json = home / ".claude", home / ".claude.json"
         return Layout(agent, "claude-code", CLAUDE_FORMAT, None, mcp_json=user_json,
                       hooks_json=base / "settings.json",
-                      hook_events=("SessionStart", "UserPromptSubmit", "PreCompact"),
+                      hook_events=("SessionStart", "UserPromptSubmit", "PreCompact", "Stop"),
                       skills=base / "skills", use_cli=True, hook_form=form, notes=notes)
     if agent == "codex":
         events = ("SessionStart", "UserPromptSubmit")
