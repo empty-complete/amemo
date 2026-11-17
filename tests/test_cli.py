@@ -413,7 +413,7 @@ def test_submit_rejected_exits_5_with_report(run, kb, tmp_path):
     bad.write_text(json.dumps({"proposals": [{"target": "atom", "payload": {"ref": "@x", "kind": "fact"}}]}),
                    encoding="utf-8")
     code, out, err = run("submit", str(bad))
-    assert code == 5 and "отклонён" in err and "violation" in err and "@x" in err and out == ""
+    assert code == 5 and "rejected the batch" in err and "violation" in err and "@x" in err and out == ""
     code, out, _ = run("submit", str(bad), "--json")
     body = js(out)
     assert code == 5 and body["code"] == "check_rejected" and body["issues"] and body["changeset_id"]
