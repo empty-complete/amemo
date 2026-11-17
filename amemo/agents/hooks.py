@@ -64,6 +64,7 @@ LABEL_MAX = 160
 SUMMARY_MAX = 200               # суть рядом с названием: короткое название говорит о предмете, суть — о сказанном
 SOURCE_MAX = 80                 # знаков имени файла, письма или адреса в строке подсказки
 SOURCE_PLACES = 3               # частей места в источнике: «с. 12, табл. 11.1, п. 5.2»
+SOURCE_PLACE_MAX = 40           # знаков в одной части места: заголовок раздела бывает длинным
 FTS_QUERY_MAX = 500             # знаков запроса в полнотекстовый канал
 RELATED_TEXT_MAX = 2000         # знаков запроса для отбора по словам: длиннее — тема размыта, хук молчит
 RELATED_WORDS_MAX = 40          # слов запроса (после стеммера, без стоп-слов) для отбора по словам, не больше
@@ -277,7 +278,9 @@ def _place(selectors) -> str:
     for selector in selectors if isinstance(selectors, list) else ():
         value = selector.get("value") if isinstance(selector, dict) else None
         if value not in (None, ""):
-            parts.append(_PLACE.get(selector.get("type"), "{}").format(" ".join(str(value).split())))
+            text = " ".join(str(value).split())
+            text = text if len(text) <= SOURCE_PLACE_MAX else text[:SOURCE_PLACE_MAX - 1] + "…"
+            parts.append(_PLACE.get(selector.get("type"), "{}").format(text))
     return ", ".join(parts[:SOURCE_PLACES])
 
 

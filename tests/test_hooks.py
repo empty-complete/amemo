@@ -337,6 +337,8 @@ def test_place_in_a_source_reads_in_words():
     assert hooks._place([{"type": "clause", "value": "5.2"}, {"type": "heading", "value": "Узел  крепления"}]) == \
         "п. 5.2, Узел крепления"
     assert hooks._place(None) == "" and hooks._place([{"type": "page"}, "мусор"]) == ""
+    long = hooks._place([{"type": "heading", "value": "раздел " * 20}])
+    assert len(long) == hooks.SOURCE_PLACE_MAX and long.endswith("…")
 
 
 def test_session_start_is_quiet_about_semantic_search_when_it_works_or_is_switched_off(kb, env):
