@@ -680,7 +680,8 @@ Plugins → Add → Upload plugin**. Добавить плагин в аккау
 
 - **Что внутри.** То же, что ставит `amemo install claude-code`: сервер MCP `amemo` с полным путём к `amemo` этой
   машины (`mcp --agent model:cowork`, `AMEMO_AS_MODEL=cowork`), хуки `SessionStart`, `UserPromptSubmit`,
-  `PreCompact` и `Stop` в форме exec (`hooks/hooks.json`) и три навыка. С приложением amemo для Windows путь — его запускатель
+  `PreCompact` и `Stop` в форме exec (`hooks/hooks.json`), три навыка, команды `/amemo:status`, `/amemo:remember`,
+  `/amemo:search`, `/amemo:verify` и помощник `verifier`. С приложением amemo для Windows путь — его запускатель
   `%LOCALAPPDATA%\amemo\bin\amemo.exe`, он не меняется с обновлениями. Хуки плагина Cowork загружает и в облачных
   сессиях, где `amemo` нет.
 - **Где работает.** Локальный сервер MCP запускается в сессиях Cowork на вашем компьютере, в приложении Claude.

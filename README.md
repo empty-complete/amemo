@@ -687,7 +687,8 @@ Add → Upload plugin**. Claude can't add a plugin to your account from the comm
 
 - **What's inside.** The same set as `amemo install claude-code`: the MCP server `amemo` with this machine's full
   path to `amemo` (`mcp --agent model:cowork`, `AMEMO_AS_MODEL=cowork`), the hooks `SessionStart`,
-  `UserPromptSubmit`, `PreCompact` and `Stop` in exec form (`hooks/hooks.json`) and the three skills. With the amemo app for
+  `UserPromptSubmit`, `PreCompact` and `Stop` in exec form (`hooks/hooks.json`), the three skills, the commands
+  `/amemo:status`, `/amemo:remember`, `/amemo:search`, `/amemo:verify` and the `verifier` agent. With the amemo app for
   Windows the path is its launcher `%LOCALAPPDATA%\amemo\bin\amemo.exe`, which does not change with updates.
   Cowork loads plugin hooks in cloud sessions too, where `amemo` doesn't exist.
 - **Where it works.** The local MCP server runs in Cowork sessions on your computer in the Claude app. Cloud
