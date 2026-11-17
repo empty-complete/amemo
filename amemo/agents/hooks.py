@@ -28,6 +28,7 @@ Claude Code 2.1.283; у формата нет своего номера верс
   не отвечает, ошибка, превышен бюджет) — пустой ответ и строка в AMEMO_STATE/hooks.log; пользователь ничего не видит,
   агент работает как без amemo. Одно исключение — начало сессии: база отказала во входе сразу (приложение или служба
   не запущены) — агент получает строку UNAVAILABLE, чтобы сказать об этом, а не упасть на первом инструменте.
+- У записи в подсказке к запросу назван первый источник: имя файла, письма или адрес и место (_sources).
 - Подсказка к запросу — только уверенная: число само по себе («8», «50», «2026») маркой не считается, записей не
   больше PROMPT_HITS. Подсказка не по делу хуже молчания. Без марки запись попадает в подсказку, только если в ней
   есть не меньше половины отличительных слов запроса и не меньше двух (related): отличительное — слово с буквами,
@@ -61,6 +62,8 @@ BARE_CODE_MIN = 5               # знаков в марке без букв: «
 CODE_CANDIDATES = 8             # кусков запроса, похожих на марку, не больше
 LABEL_MAX = 160
 SUMMARY_MAX = 200               # суть рядом с названием: короткое название говорит о предмете, суть — о сказанном
+SOURCE_MAX = 80                 # знаков имени файла, письма или адреса в строке подсказки
+SOURCE_PLACES = 3               # частей места в источнике: «с. 12, табл. 11.1, п. 5.2»
 FTS_QUERY_MAX = 500             # знаков запроса в полнотекстовый канал
 RELATED_TEXT_MAX = 2000         # знаков запроса для отбора по словам: длиннее — тема размыта, хук молчит
 RELATED_WORDS_MAX = 40          # слов запроса (после стеммера, без стоп-слов) для отбора по словам, не больше
@@ -241,8 +244,12 @@ def _text(value) -> str | None:
     return value if len(value) <= LABEL_MAX else value[:LABEL_MAX - 1] + "…"
 
 
-def _line(ref: str, label, kind: str | None, status: str | None, summary=None) -> str:
+def _line(ref: str, label, kind: str | None, status: str | None, summary=None, source: str | None = None) -> str:
+    """Строка записи: ссылка, название, в скобках — вид, статус проверки и источник (source — готовый текст
+    из _sources), после двоеточия — суть."""
     what = _safe("; ".join(part for part in (kind, STATUS_TEXT.get(status, status)) if part))
+    if source:
+        what = "; ".join(part for part in (what, f"источник: {source}") if part)
     name = _text(label) or ref
     gist = _text(summary)
     gist = gist if gist is None or len(gist) <= SUMMARY_MAX else gist[:SUMMARY_MAX - 1] + "…"
@@ -258,6 +265,41 @@ def _summaries(conn, refs: list[str]) -> dict[str, object]:
     rows = conn.execute("SELECT c.atom_id, r.payload->'summary_plain' FROM atom_current c "
                         "JOIN atom_revision r ON r.id = c.id WHERE c.atom_id = ANY(%s::uuid[])", (ids,)).fetchall()
     return {f"atm:{atom_id}": summary for atom_id, summary in rows}
+
+
+# место в источнике словами по типу селектора; неизвестный тип — значение как есть
+_PLACE = {"page": "с. {}", "sheet": "лист {}", "clause": "п. {}", "table": "табл. {}", "figure": "рис. {}",
+          "formula": "формула ({})"}
+
+
+def _place(selectors) -> str:
+    parts = []
+    for selector in selectors if isinstance(selectors, list) else ():
+        value = selector.get("value") if isinstance(selector, dict) else None
+        if value not in (None, ""):
+            parts.append(_PLACE.get(selector.get("type"), "{}").format(" ".join(str(value).split())))
+    return ", ".join(parts[:SOURCE_PLACES])
+
+
+def _sources(conn, refs: list[str]) -> dict[str, str]:
+    """Первый источник текущих ревизий атомов (ссылки atm:…) одной строкой: имя файла, письма или адрес страницы
+    и место — «СП 50.pdf, с. 12, табл. 11.1». У записи без источника ключа нет."""
+    ids = [ref.split(":", 1)[1] for ref in refs if ref.startswith("atm:")]
+    if not ids:
+        return {}
+    rows = conn.execute(
+        "SELECT DISTINCT ON (c.atom_id) c.atom_id, coalesce(o.original_name, o.url), s.selectors "
+        "FROM atom_current c JOIN source s ON s.atom_revision_id = c.id JOIN object o ON o.id = s.object_id "
+        "WHERE c.atom_id = ANY(%s::uuid[]) ORDER BY c.atom_id, s.position", (ids,)).fetchall()
+    found = {}
+    for atom_id, name, selectors in rows:
+        name = " ".join((name or "").split())
+        if not name:
+            continue
+        name = name if len(name) <= SOURCE_MAX else name[:SOURCE_MAX - 1] + "…"
+        place = _place(selectors)
+        found[f"atm:{atom_id}"] = _safe(f"{name}, {place}" if place else name)
+    return found
 
 
 # --- SessionStart ---
@@ -465,11 +507,12 @@ def prompt_submit(conn, prompt) -> str:
         return ""
     labels = lookup.labels(conn, refs)
     gists = _summaries(conn, refs)
+    places = _sources(conn, refs)
     lines = [FRAME]
     for ref in refs:
         info = labels.get(ref) or {}
         lines.append(_line(ref, info.get("label"), info.get("kind") or info.get("entity_class"), info.get("status"),
-                           gists.get(ref)))
+                           gists.get(ref), places.get(ref)))
     lines.append("Запись целиком — amemo_get по ссылке; помогла — отметь amemo_helpful.")
     return "\n".join(lines)
 

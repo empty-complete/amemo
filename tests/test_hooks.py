@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from amemo import cli, db, embed, records
+from amemo import cli, db, embed, objects, records
 from amemo.agents import hooks
 from amemo.records import Item
 from conftest import FakeProvider
@@ -316,6 +316,27 @@ def test_prompt_line_carries_the_gist_after_a_short_label(kb, env):
     text = context(out, "UserPromptSubmit")
     assert (f"- {refs['@gist']} — «Кронштейн ВН-47» (fact; не проверено): "
             "Кронштейн держится на одном анкере М10.") in text
+
+
+def test_prompt_line_names_the_first_source(kb, env):
+    """У записи с источником в скобках после статуса — имя письма или файла и место."""
+    letter = objects.message(kb, "Письмо о креплении кронштейна")
+    body = atom("src", codes=["ВН-48"], label="Кронштейн ВН-48")
+    body.payload["sources"] = [{"object": letter.ref, "object_version": 1,
+                                "selectors": [{"type": "page", "value": "12"}, {"type": "table", "value": "3"}]}]
+    refs = records.commit(kb, [body, atom("bare", codes=["ВН-49"], label="Кронштейн ВН-49")], agent=AGENT).refs
+    out = hooks.run("UserPromptSubmit", event("UserPromptSubmit", prompt="Что с ВН-48 и ВН-49?"), env)
+    text = context(out, "UserPromptSubmit")
+    assert (f"- {refs['@src']} — «Кронштейн ВН-48» (fact; не проверено; источник: Письмо о креплении кронштейна, "
+            "с. 12, табл. 3)") in text
+    assert f"- {refs['@bare']} — «Кронштейн ВН-49» (fact; не проверено)" in text       # без источника — как было
+    assert hooks_log(env) == ""
+
+
+def test_place_in_a_source_reads_in_words():
+    assert hooks._place([{"type": "clause", "value": "5.2"}, {"type": "heading", "value": "Узел  крепления"}]) == \
+        "п. 5.2, Узел крепления"
+    assert hooks._place(None) == "" and hooks._place([{"type": "page"}, "мусор"]) == ""
 
 
 def test_session_start_is_quiet_about_semantic_search_when_it_works_or_is_switched_off(kb, env):
