@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { errorText } from "../../api/errors";
+import { issueText } from "../../api/issues";
 import { q } from "../../api/queries";
 import type { components } from "../../api/schema";
 import { agentName } from "../../ui/format";
@@ -238,7 +239,7 @@ export function ReviewItemPane({ id, onBack }: { id: string; onBack?: () => void
                     <span className="status" data-tone={SEV[sev]}>
                       <Icon name={sev === "info" ? "dash" : "warn"} />
                     </span>
-                    {o.message ?? word(o.code ?? "")}
+                    {o.message ? issueText(o) : word(o.code ?? "")}
                   </li>
                 );
               })}

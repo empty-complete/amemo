@@ -92,7 +92,7 @@ class Context:
                 if detected is not None and explicit.startswith("person:"):
                     raise CliError(f"--agent {explicit}: в окружении агента ({detected[1]}) запись от имени человека "
                                    f"не принимается — команда идёт от {detected[0]}", exit=USAGE, code="bad_agent",
-                                   hint="человек пишет из своего терминала, без агента")
+                                   hint="a person writes from their own terminal, without an agent")
                 self._agent = explicit
             elif detected is not None:
                 self._agent = detected[0]

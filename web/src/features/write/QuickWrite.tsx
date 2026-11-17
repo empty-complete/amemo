@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "react-aria-components";
 import { useTranslation } from "react-i18next";
+import { rejectedText } from "../../api/issues";
 import { q } from "../../api/queries";
 import { Icon } from "../../ui/icons";
 import { type LangString, pickText, useText } from "../../ui/lang";
@@ -143,9 +144,10 @@ export function QuickWrite({ trigger }: { trigger: React.RefObject<HTMLElement |
         about: ((d.values.about as string[]) ?? []).filter((r) => r.startsWith("ent:")),
         family: tpl?.family === "source" ? "source" : "work",
         onDone: () => dropDraft(key),
-        onIssues: (_, message) => {
+        onIssues: (list, message) => {
           saveDraft(key, d);
-          navigate({ to: "/new", search: { about: about ?? undefined, kind, issue: message } as never });
+          const issue = list.length ? rejectedText(list) : message;
+          navigate({ to: "/new", search: { about: about ?? undefined, kind, issue } as never });
         },
       },
     );

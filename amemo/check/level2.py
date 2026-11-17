@@ -49,7 +49,7 @@ ONE_PAGE_OK = (".md", ".txt")              # одностраничное ok б�
 RANGE = re.compile(r"^\s*(\d+)\s*[-–—‒]\s*(\d+)\s*$")
 MAX_RANGE = 50                             # страниц в диапазоне селектора page: больше — это не фрагмент
 RETIRED = ("rejected", "deprecated", "superseded")
-NO_OCR = "нет языковых данных tesseract или ocr = none (языки — amemo ocr install rus eng)"
+NO_OCR = "tesseract language data is missing or ocr = none (languages: amemo ocr install rus eng)"
 FILE_KINDS = ("file",)
 
 
@@ -191,8 +191,8 @@ class _Level2:
             if not path:
                 return None
             if self.docs is None:            # служба без AMEMO_DOCS: путь не разобрать — ни файл, ни сайт, ни письмо
-                self.add("violation", "source_unresolved", where, "Источник не разобрался: папка документов не "
-                         "настроена (AMEMO_DOCS) — путь источника не разобрать", path=path)
+                self.add("violation", "source_unresolved", where, "The source is not resolved: the documents folder "
+                         "is not set (AMEMO_DOCS), so the source path cannot be resolved", path=path)
                 return None
             if path not in self.paths:
                 try:
@@ -207,19 +207,19 @@ class _Level2:
                     self.paths[path] = {k: got[k] for k in ("object", "object_version", "digest") if k in got}
             found = self.paths[path]
             if isinstance(found, str):
-                self.add("violation", "source_unresolved", where, f"Источник не разобрался: {found}", path=path)
+                self.add("violation", "source_unresolved", where, f"The source is not resolved: {found}", path=path)
                 return None
             return {**{k: v for k, v in source.items() if k != "digest"}, **found}
         object_id, n = objects.object_uuid(source["object"]), source.get("object_version")
         row = self.conn.execute("SELECT digest FROM object_version WHERE object_id = %s AND n = %s",
                                 (object_id, n)).fetchone()
         if row is None:
-            self.add("violation", "version_missing", where, f"У объекта {source['object']} нет версии {n}",
+            self.add("violation", "version_missing", where, f"The object {source['object']} has no version {n}",
                      object=source["object"], object_version=n)
             return None
         if source.get("digest") != row[0]:
             self.add("violation", "digest_mismatch", where,
-                     f"digest {source.get('digest') or 'не указан'} не совпадает с версией {n} объекта "
+                     f"digest {source.get('digest') or 'not given'} does not match version {n} of the object "
                      f"{source['object']}", digest=source.get("digest"), expected=row[0])
             return None
         return dict(source)
@@ -237,8 +237,8 @@ class _Level2:
             (list(RETIRED), objects.object_uuid(src["object"]), src["object_version"])).fetchall()
         if len(rows) == 1:
             src["edition"] = f"ent:{rows[0][0]}"
-            self.add("info", "edition_filled", f"{where}.edition", f"Редакция подставлена по файлу: {src['edition']}",
-                     edition=src["edition"])
+            self.add("info", "edition_filled", f"{where}.edition",
+                     f"The edition is filled in from the file: {src['edition']}", edition=src["edition"])
 
     # --- место ---
 
@@ -250,11 +250,11 @@ class _Level2:
             try:
                 got = objects.extraction(self.conn, self.store, src["object"], src["object_version"])
             except FileNotFoundError as e:             # копии версии нет — хранилище не в порядке, а не данные
-                raise StoreError(f"{where}: копии файла нет в хранилище ({e})") from e
+                raise StoreError(f"{where}: the store has no copy of the file ({e})") from e
             except (StoreError, psycopg.Error):
                 raise
             except Exception as e:                     # сбой разбора файла (PyMuPDF, openpyxl …) — не ошибка данных
-                log.exception("%s: сбой извлечения текста %s v%s", where, src["object"], src["object_version"])
+                log.exception("%s: text extraction failed for %s v%s", where, src["object"], src["object_version"])
                 raise _ExtractError(f"{type(e).__name__}: {e}") from e
             doc = sources.DocText.of(got.pages, got.ocr, got.image) if got.pages is not None else None
             self.texts[key] = (doc, got.ocr_unavailable)
@@ -265,17 +265,18 @@ class _Level2:
         p = place(src.get("selectors"), src.get("quote"))
         quote_sev = "violation" if is_atom else "warning"
         if kind not in FILE_KINDS:
-            self.add("warning", "external_source", where, "Источник — страница сайта или переписка: место не сверяется")
+            self.add("warning", "external_source", where,
+                     "The source is a web page or a message: the place is not checked")
             return SourceCheck(i, "external", None, None)
         name = name or ""
         if is_atom and (media_type == "application/pdf" or name.lower().endswith(".pdf")):
             bad = False
             if not (p.page or p.pages):
-                self.add("violation", "pdf_page_required", where, "У источника из PDF нет селектора страницы")
+                self.add("violation", "pdf_page_required", where, "A PDF source needs a page selector")
                 bad = True
             if len(p.quote) < sources.MIN_QUOTE:
                 self.add("violation", "pdf_quote_required", where,
-                         f"У источника из PDF нужна дословная цитата не короче {sources.MIN_QUOTE} знаков",
+                         f"A PDF source needs a verbatim quote of at least {sources.MIN_QUOTE} characters",
                          min_quote=sources.MIN_QUOTE)
                 bad = True
             if bad:
@@ -285,41 +286,42 @@ class _Level2:
         try:
             doc, no_ocr = self.text(src, where)
         except _ExtractError as e:
-            self.add("warning", "source_error", where, f"Сбой при извлечении текста: {e}",
+            self.add("warning", "source_error", where, f"Text extraction failed: {e}",
                      error=type(e.__cause__).__name__)
             return SourceCheck(i, "error", None, None)
         if doc is None:
             if no_ocr:
-                self.add("warning", "no_text", where, f"У файла «{name}» нет текстового слоя (скан), а OCR "
-                         f"недоступен — {NO_OCR}: место не сверяется", ocr="unavailable")
+                self.add("warning", "no_text", where, f"The file «{name}» has no text layer (a scan) and OCR "
+                         f"is unavailable — {NO_OCR}: the place is not checked", ocr="unavailable")
             else:
-                self.add("warning", "no_text", where, f"У файла «{name}» нет текста: место не сверяется")
+                self.add("warning", "no_text", where, f"The file «{name}» has no text: the place is not checked")
             return SourceCheck(i, "no_text", None, None)
         v, expected = self.locate(doc, p, name)              # ошибка сверки — ошибка кода: она уходит наружу
         if v.page in doc.ocr:
-            self.add("info", "quote_ocr", where, f"Место сверено с текстом, распознанным OCR (страница {v.page} — "
-                     f"скан без текстового слоя), а не с текстовым слоем", page=v.page)
+            self.add("info", "quote_ocr", where, f"The place is checked against OCR text (page {v.page} is "
+                     f"a scan without a text layer), not against a text layer", page=v.page)
         if v.verdict in ("ok", "moved", "by_locator"):
             if v.verdict == "moved":
-                self.add("info", "page_moved", where, f"Цитата найдена на странице {v.page}, а не {expected}",
+                self.add("info", "page_moved", where, f"The quote is on page {v.page}, not {expected}",
                          page=v.page, expected=expected)
             found = sorted({v.page, *(n for n in p.pages if n <= len(doc.pages))})
             return SourceCheck(i, v.verdict, v.page, v.anchor or None, [doc.pages[n - 1] for n in found])
         if v.verdict == "fuzzy":
             self.add(quote_sev, "quote_fuzzy", f"{where}.quote",
-                     f"Цитата найдена только приблизительно (схожесть {v.score:.0f}%), в документе: «{v.anchor}»",
+                     f"The quote is found only approximately (similarity {v.score:.0f}%); "
+                     f"the document has: «{v.anchor}»",
                      anchor=v.anchor, page=v.page, score=round(v.score, 1))
             return SourceCheck(i, "fuzzy", v.page, v.anchor)
         if v.verdict == "not_found":
             if p.page in doc.image:
-                self.add(quote_sev, "quote_not_found", f"{where}.quote", f"На странице {p.page} нет текстового "
-                         f"слоя (скан), а OCR недоступен — {NO_OCR}: цитату не с чем сверить",
+                self.add(quote_sev, "quote_not_found", f"{where}.quote", f"Page {p.page} has no text "
+                         f"layer (a scan) and OCR is unavailable — {NO_OCR}: nothing to check the quote against",
                          quote=p.quote, page=p.page, ocr="unavailable")
             else:
-                self.add(quote_sev, "quote_not_found", f"{where}.quote", "Цитаты нет в тексте документа",
+                self.add(quote_sev, "quote_not_found", f"{where}.quote", "The quote is not in the text of the document",
                          quote=p.quote)
             return SourceCheck(i, "not_found", None, None)
-        self.add("warning", "place_unresolved", where, "Цитата не задана, и место в документе не найдено")
+        self.add("warning", "place_unresolved", where, "No quote is given and the place is not found in the document")
         return SourceCheck(i, "unresolved", None, None)
 
     @staticmethod
@@ -345,7 +347,8 @@ class _Level2:
             return
         fragments = [f for c in checks for f in c.fragments]
         if not any(c.fragments for c in checks):
-            self.add("info", "numbers_unchecked", item.label, "Числа атома не с чем сверить: у источников нет фрагмента")
+            self.add("info", "numbers_unchecked", item.label,
+                     "Nothing to check the numbers of the atom against: the sources have no fragment")
             return
         lost = numbers.missing(nums, fragments)
         derived = any(s.get("role") == "derived" for s in resolved)
@@ -355,5 +358,5 @@ class _Level2:
         for severity in ("violation", "warning"):
             if severity in groups:
                 listed = ", ".join(n["value"] for n in groups[severity])
-                self.add(severity, "number_not_found", item.label, f"Чисел атома нет во фрагменте источника: {listed}",
-                         numbers=groups[severity])
+                self.add(severity, "number_not_found", item.label,
+                         f"Numbers of the atom are not in the source fragment: {listed}", numbers=groups[severity])

@@ -366,11 +366,11 @@ def test_report_has_violations_and_summary():
     from amemo.check.report import Report
 
     report = Report()
-    assert report.has_violations() is False and report.summary() == "Замечаний нет"
+    assert report.has_violations() is False and report.summary() == "No issues"
     report.add(2, "info", "page_moved", "@a: sources[0]", "Цитата найдена на странице 3, а не 2", page=3)
     report.add(1, "violation", "template", "@b: sources", "У атома нет источника.")
     assert report.has_violations() is True
-    assert report.summary() == ("Ошибок: 1, предупреждений: 0, сведений: 1\n"
+    assert report.summary() == ("Errors: 1, warnings: 0, notes: 1\n"
                                 "- violation template — @b: sources: У атома нет источника.")
 
 
@@ -428,7 +428,7 @@ def test_new_agent_is_inserted_before_record_lock(kb, store, docs, monkeypatch):
 # --- неверный вызов ---
 
 def test_empty_batch_is_check_error(kb, store, docs):
-    with pytest.raises(check.CheckError, match="пустая пачка"):
+    with pytest.raises(check.CheckError, match="the batch is empty"):
         check.submit(kb, store, docs, [], [], agent=AGENT)
     assert kb.execute("SELECT count(*) FROM changeset").fetchone()[0] == 0
     assert kb.execute("SELECT count(*) FROM agent WHERE id = %s", (AGENT,)).fetchone()[0] == 0

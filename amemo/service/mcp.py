@@ -75,18 +75,18 @@ INSTRUCTIONS = (
     "(пакет проходит автопроверку). / amemo is an atom knowledge base: search → timeline → get; mark helpful atoms; "
     "submit new ones through the check.")
 HINTS = {
-    "not_found": "найдите запись: amemo_search(query) и передайте её ссылку atm:/ent:",
-    "check_rejected": "исправьте замечания issues и отправьте пакет снова",
-    "read_only": "токен только для чтения: запись — по токену с write = true",
-    "forbidden": "это действие не по праву вашего входа: папки создаёт и переименовывает человек, helpful — только "
-                 "для своей выдачи",
-    "review_forbidden": "свободные пункты для вас — amemo_review_claim",
-    "review_closed": "пункт уже решён — возьмите другой: amemo_review_claim",
-    "folder_not_found": "переносить можно только в существующую папку",
-    "db_unavailable": "база недоступна — повторите позже",
-    "semantic_unavailable": "смысловой поиск недоступен — ищите amemo_search по тексту и маркам",
-    "task_claimed": "задачу держит другой агент — возьмите свободную: amemo_tasks",
-    "task_closed": "задача уже закрыта — свободные: amemo_tasks",
+    "not_found": "find the record with amemo_search(query) and pass its atm:/ent: reference",
+    "check_rejected": "fix what the issues name and send the batch again",
+    "read_only": "the token is read-only: writing needs a token with write = true",
+    "forbidden": "your login may not do this: folders are created and renamed by a person, and helpful is only "
+                 "for your own result",
+    "review_forbidden": "items free for you: amemo_review_claim",
+    "review_closed": "the item is already resolved — take another: amemo_review_claim",
+    "folder_not_found": "a record can only be moved to an existing folder",
+    "db_unavailable": "the database is unavailable — try again later",
+    "semantic_unavailable": "semantic search is unavailable — use amemo_search with words and codes",
+    "task_claimed": "another agent holds the task — take a free one: amemo_tasks",
+    "task_closed": "the task is already closed — free ones: amemo_tasks",
 }
 READ = ToolAnnotations(read_only_hint=True, open_world_hint=False)
 WRITE = ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world_hint=False)
@@ -171,13 +171,13 @@ def failure(exc: BaseException) -> CallToolResult:
     """Ошибка инструмента: isError, текст «код: что случилось» с подсказкой и тело problem+json."""
     problem = exc.problem if isinstance(exc, _Refused) else problems.to_problem(exc)
     if problem.code == "internal":
-        log.error("MCP: необработанная ошибка инструмента", exc_info=exc)
+        log.error("MCP: unhandled tool error", exc_info=exc)
     elif problem.code == "db_unavailable":
-        log.warning("MCP: база недоступна: %s", exc)
+        log.warning("MCP: the database is unavailable: %s", exc)
     body = problems.body(problem.status, problem.code, problem.detail, extra=problem.extra)
     text = f"{problem.code}: {problem.detail or body['title']}"
     if HINTS.get(problem.code):
-        text += f"\nподсказка: {HINTS[problem.code]}"
+        text += f"\nhint: {HINTS[problem.code]}"
     if problem.code == "check_rejected":
         text += "\n" + json.dumps({k: body.get(k) for k in ("issues", "warnings", "changeset_id")}, ensure_ascii=False)
     return CallToolResult(content=[TextContent(type="text", text=text)], structured_content=body, is_error=True)

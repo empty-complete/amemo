@@ -292,7 +292,7 @@ def test_scan_without_ocr_says_so(kb, store, docs):
     assert check.verdict == "no_text"
     assert issues == [("no_text", "warning", "@a: sources[0]")]
     issue = l2(report, "no_text")[0]
-    assert "OCR" in issue.message and "текстового слоя" in issue.message and issue.details == {"ocr": "unavailable"}
+    assert "OCR" in issue.message and "text layer" in issue.message and issue.details == {"ocr": "unavailable"}
     assert text_sources(kb) == [(0, "image")]
     if sources.ocr_languages():
         check, issues, _, _ = one(kb, store, docs, scan_atom())
@@ -308,7 +308,7 @@ def test_quote_on_scan_page_without_ocr_names_the_page(kb, store, docs, monkeypa
     assert check.verdict == "not_found"
     assert issues == [("quote_not_found", "violation", "@a: sources[0].quote")]
     issue = l2(report, "quote_not_found")[0]
-    assert "странице 2" in issue.message and "OCR" in issue.message
+    assert "Page 2" in issue.message and "OCR" in issue.message
     assert issue.details == {"quote": SCAN_QUOTE, "page": 2, "ocr": "unavailable"}
     assert text_sources(kb) == [(1, "layer"), (2, "image")]
     # цитата со страницы с текстовым слоем того же файла — обычное дело

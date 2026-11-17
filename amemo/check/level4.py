@@ -115,7 +115,7 @@ def _text_rows(conn, item: Prepared) -> list[tuple]:
 
 def check_semantic_error(value: str) -> None:
     if value not in recipes.SEMANTIC_ERRORS:
-        raise ValueError(f"on_semantic_error {value!r}: допустимы {', '.join(recipes.SEMANTIC_ERRORS)}")
+        raise ValueError(f"on_semantic_error {value!r}: allowed values are {', '.join(recipes.SEMANTIC_ERRORS)}")
 
 
 @functools.cache
@@ -194,12 +194,13 @@ def _report(report: Report, item: Prepared, found: dict[str, dict]) -> None:
     rel = [_public(c) for c in ordered if c["verdict"] == "related"][:RELATED]
     if dup:
         report.add(LEVEL, "warning", "duplicate", item.label,
-                   "Похоже на " + ", ".join(c["ref"] for c in dup)
-                   + (": кандидат в same_as." if item.target == "entity" else ": кандидат в слияние."),
+                   "Looks like " + ", ".join(c["ref"] for c in dup)
+                   + (": a candidate for same_as." if item.target == "entity" else ": a candidate for a merge."),
                    candidates=dup)
     if rel:
         report.add(LEVEL, "info", "related", item.label,
-                   "Похожие записи ниже порога дубля: " + ", ".join(c["ref"] for c in rel) + ".", candidates=rel)
+                   "Similar records below the duplicate threshold: " + ", ".join(c["ref"] for c in rel) + ".",
+                   candidates=rel)
 
 
 def _public(cand: dict) -> dict:

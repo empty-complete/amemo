@@ -28,7 +28,7 @@ class _Parser(argparse.ArgumentParser):
     """argparse без sys.exit: ошибка разбора — CliError (код 2), справка — _Done (код 0)."""
 
     def error(self, message: str):
-        raise CliError(message, exit=USAGE, code="usage", hint=f"справка: {self.prog} --help")
+        raise CliError(message, exit=USAGE, code="usage", hint=f"help: {self.prog} --help")
 
     def exit(self, status: int = 0, message: str | None = None):
         if message:
@@ -205,7 +205,7 @@ def report(exc: BaseException, *, as_json: bool, out, err, env: Mapping[str, str
         status, code, detail, extra = problem.status, problem.code, problem.detail, problem.extra
         code_out, hint = exit_code(status, code), problems_hint(code)
         if code == "internal":
-            detail = f"внутренняя ошибка: {type(exc).__name__}: {exc}"
+            detail = f"internal error: {type(exc).__name__}: {exc}"
             if (env or {}).get("AMEMO_DEBUG", "").strip() not in ("", "0"):
                 import traceback
 
@@ -214,13 +214,13 @@ def report(exc: BaseException, *, as_json: bool, out, err, env: Mapping[str, str
         body = problems.body(status or 0, code, detail, extra=extra)
         if status is None:                # у ошибки CLI нет HTTP-аналога: статуса нет, а не «0»
             del body["status"]
-            body["title"] = "Ошибка"
+            body["title"] = "Error"
         print(dumps(body), file=out)
     else:
         print(f"amemo: {detail or code}", file=err)
         _details(code, extra, err)
         if hint:
-            print(f"подсказка: {hint}", file=err)
+            print(f"hint: {hint}", file=err)
     return code_out
 
 
@@ -242,7 +242,7 @@ def _details(code: str, extra: dict, err) -> None:
             where = issue["ref"] + (f": {issue['path']}" if issue.get("path") else "")
             print(f"  {issue['severity']}  {issue['code']}  {where}: {issue['message']}", file=err)
         for warning in extra.get("warnings", []):
-            print(f"  предупреждение  {warning['code']}  {warning['ref']}: {warning['path']}", file=err)
+            print(f"  warning  {warning['code']}  {warning['ref']}: {warning['path']}", file=err)
     elif code == "bundle_key_collision":
         for item in extra.get("collisions", []) or []:
             print(f"  {item}", file=err)

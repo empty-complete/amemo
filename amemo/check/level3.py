@@ -63,7 +63,8 @@ class _Level3:
         concept = self.properties.get(prop)
         if concept is None:
             self.add("unknown_property", f"{label}: {where}.property",
-                     f"Величины {prop!r} нет в словаре property — кандидат в новое понятие.", property=prop)
+                     f"The property {prop!r} is not in the property vocabulary: a candidate for a new concept.",
+                     property=prop)
             return
         low, high, base = concept.get("plausible_min"), concept.get("plausible_max"), concept.get("unit")
         unit = value.get("unit")
@@ -76,12 +77,12 @@ class _Level3:
             converted = x if unit == base else units.convert(x, unit, base)
             if converted is None:
                 self.add("unit_mismatch", f"{label}: {where}.unit",
-                         f"Единицу {unit} нельзя перевести в {base} — единицу величины {prop}.",
+                         f"The unit {unit} cannot be converted to {base}, the unit of the property {prop}.",
                          property=prop, unit=unit, expected=base)
                 return
             if low is not None and converted < low or high is not None and converted > high:
                 self.add("out_of_range", f"{label}: {where}.{field}",
-                         f"{prop}: {x} {unit} (это {converted:g} {base}) вне диапазона {low}–{high} {base}.",
+                         f"{prop}: {x} {unit} (that is {converted:g} {base}) is outside the range {low}–{high} {base}.",
                          property=prop, value=x, unit=unit, converted=converted, plausible_min=low,
                          plausible_max=high)
 
@@ -142,7 +143,7 @@ class _Level3:
             if found:
                 risks[item.label] = ["conflict"]
                 self.add("conflict", item.label,
-                         "Другое значение той же величины у той же сущности при тех же условиях: "
+                         "Another value of the same property for the same entity under the same conditions: "
                          + ", ".join(found) + ".", candidates=[{"ref": ref, "suggest": "contradicts"} for ref in found])
         return risks
 
