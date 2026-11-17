@@ -13,7 +13,9 @@ reference; сверено 11.11.2026, FORMAT) — тот же набор, что
 - hooks/hooks.json — хуки SessionStart, UserPromptSubmit, PreCompact (`amemo hook СОБЫТИЕ`) в форме exec: команда и
   аргументы без оболочки — одинаково в Windows и в других системах, пути с пробелами не нужно заключать в кавычки.
   Хуки только читают базу, поэтому AMEMO_AS_MODEL им не нужна;
-- skills/ИМЯ/SKILL.md — навыки ядра.
+- skills/ИМЯ/SKILL.md — навыки ядра;
+- commands/ИМЯ.md — команды /amemo:ИМЯ (status, remember, search, verify), agents/ИМЯ.md — помощники
+  (verifier); тексты — amemo/agents/plugin.
 
 Команда amemo — запускатель приложения для Windows (`%LOCALAPPDATA%\\amemo\\bin\\amemo.exe`, AMEMO_LAUNCHER) или
 amemo из PATH (install.amemo_command): у запускателя путь не меняется с обновлением, и плагин не устаревает.
@@ -39,6 +41,7 @@ import sys
 import tempfile
 import zipfile
 from dataclasses import dataclass, field
+from importlib import resources
 from pathlib import Path
 from typing import Mapping
 
@@ -100,6 +103,21 @@ def plugin_files(command: list[str]) -> dict[str, str]:
              "hooks/hooks.json": _json({"hooks": hooks})}
     for name in SKILLS:
         files[f"skills/{name}/SKILL.md"] = skill_text(name)
+    files.update(plugin_texts(command))
+    return files
+
+
+PLUGIN_PARTS = ("commands", "agents")       # commands/ИМЯ.md — команда /amemo:ИМЯ; agents/ИМЯ.md — помощник amemo:ИМЯ
+
+
+def plugin_texts(command: list[str]) -> dict[str, str]:
+    """Команды и помощники плагина (amemo/agents/plugin): путь в zip → текст; {amemo} — команда amemo этой машины."""
+    root = resources.files("amemo") / "agents" / "plugin"
+    files = {}
+    for part in PLUGIN_PARTS:
+        for item in sorted((root / part).iterdir(), key=lambda entry: entry.name):
+            if item.name.endswith(".md"):
+                files[f"{part}/{item.name}"] = item.read_text(encoding="utf-8").replace("{amemo}", show(command))
     return files
 
 
