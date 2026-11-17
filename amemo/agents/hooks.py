@@ -29,7 +29,10 @@ Claude Code 2.1.283; у формата нет своего номера верс
   агент работает как без amemo. Одно исключение — начало сессии: база отказала во входе сразу (приложение или служба
   не запущены) — агент получает строку UNAVAILABLE, чтобы сказать об этом, а не упасть на первом инструменте.
 - Подсказка к запросу — только уверенная: число само по себе («8», «50», «2026») маркой не считается, записей не
-  больше PROMPT_HITS. Подсказка не по делу хуже молчания.
+  больше PROMPT_HITS. Подсказка не по делу хуже молчания. Без марки запись попадает в подсказку, только если в ней
+  есть не меньше половины отличительных слов запроса и не меньше двух (related): отличительное — слово с буквами,
+  которого нет в большинстве записей базы; слова, которых в базе нет вовсе, идут в счёт запроса — так запрос
+  не по теме базы остаётся без подсказки. Это отбор по словам, а не по смыслу: вектор запроса хук не считает.
 - Конец ответа (Stop): в сессии была работа, а записи в amemo не было — одно напоминание записать выводы; что была
   работа, видно по вызовам инструментов в журнале разговора (transcript_path, последние STOP_TAIL байт).
 """
@@ -59,6 +62,13 @@ CODE_CANDIDATES = 8             # кусков запроса, похожих н
 LABEL_MAX = 160
 SUMMARY_MAX = 200               # суть рядом с названием: короткое название говорит о предмете, суть — о сказанном
 FTS_QUERY_MAX = 500             # знаков запроса в полнотекстовый канал
+RELATED_TEXT_MAX = 2000         # знаков запроса для отбора по словам: длиннее — тема размыта, хук молчит
+RELATED_WORDS_MAX = 40          # слов запроса (после стеммера, без стоп-слов) для отбора по словам, не больше
+RELATED_WORD_MIN = 3            # знаков в слове: «м», «мм», «кг» темы не называют
+RELATED_COMMON_SHARE = 0.15     # слово, которое есть в большей доле записей базы, темы не называет
+RELATED_COMMON_FLOOR = 5        # в маленькой базе: слово не более чем из стольких записей — отличительное
+RELATED_PART = 0.5              # такая доля отличительных слов запроса должна быть в записи
+RELATED_LEAST = 2               # и не меньше стольких слов
 STOP_TAIL = 4 * 1024 * 1024     # байт журнала разговора с конца: длинная сессия не съедает бюджет хука
 STOP_WORK_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")      # правка файлов — работа
 STOP_TOOL_CALLS = 8             # столько вызовов инструментов без правки файлов — тоже работа (поиск, разбор)
@@ -366,9 +376,64 @@ def code_candidates(text: str) -> list[str]:
     return list(dict.fromkeys(found))[:CODE_CANDIDATES]
 
 
+# лексема как запрос: в кавычках, кавычка и обратная черта внутри удвоены (синтаксис tsquery); chr() — чтобы
+# не экранировать их ещё и в строке SQL
+_LEXEME = ("(chr(39) || replace(replace({0}, chr(92), chr(92) || chr(92)), chr(39), chr(39) || chr(39)) "
+           "|| chr(39))::tsquery")
+_RELATED_SQL = f"""
+WITH words AS (SELECT unnest(%(words)s::text[]) AS l),
+total AS (SELECT count(*) AS n FROM search_document),
+freq AS (
+    SELECT w.l, (SELECT count(*) FROM search_document d WHERE d.search_vector @@ {_LEXEME.format("w.l")}) AS df
+    FROM words w),
+telling AS (
+    SELECT f.l, f.df, ln((t.n + 1)::float8 / (f.df + 1)) AS weight
+    FROM freq f CROSS JOIN total t
+    WHERE f.df <= greatest(%(floor)s::float8, t.n * %(share)s::float8)),
+found AS (
+    SELECT d.target, d.record_id, count(*) AS matched, sum(s.weight) AS weight
+    FROM telling s
+    JOIN search_document d ON d.search_vector @@ {_LEXEME.format("s.l")}
+    LEFT JOIN atom a ON d.target = 'atom' AND a.id = d.record_id
+    LEFT JOIN entity e ON d.target = 'entity' AND e.id = d.record_id
+    WHERE s.df > 0 AND (a.status::text = ANY(%(statuses)s) OR e.status::text = ANY(%(statuses)s))
+    GROUP BY d.target, d.record_id)
+SELECT f.target, f.record_id
+FROM found f
+WHERE f.matched >= greatest(%(least)s::numeric, ceil((SELECT count(*) FROM telling) * %(part)s::numeric))
+ORDER BY f.matched DESC, f.weight DESC, f.target, f.record_id
+LIMIT {PROMPT_HITS}
+"""
+
+
+def related(conn, text: str) -> list[str]:
+    """Записи по теме запроса без марки: в записи есть не меньше RELATED_PART отличительных слов запроса и не меньше
+    RELATED_LEAST. Слово — лексема запроса с буквами не короче RELATED_WORD_MIN (числа темы не называют);
+    отличительное — то, которого нет в большинстве записей (доля RELATED_COMMON_SHARE, в маленькой базе — не больше
+    RELATED_COMMON_FLOOR записей). Слова, которых в базе нет вовсе, тоже отличительные: они идут в счёт запроса,
+    и запрос не по теме базы порог не проходит. Длинный запрос (RELATED_TEXT_MAX, RELATED_WORDS_MAX) — ничего:
+    одна запись его тему не подтверждает. Выше — записи, где слов больше, затем где они реже.
+
+    Лексемы — конфигурации ru: латиницу она ведёт английским стеммером, так что слова находятся и в слотах en."""
+    from .. import lang, search
+
+    if len(text) > RELATED_TEXT_MAX:
+        return []
+    words = [row[0] for row in conn.execute(
+        f"SELECT l FROM unnest(tsvector_to_array(to_tsvector('{lang.FTS['ru']}', %(text)s::text))) AS l "
+        f"WHERE char_length(l) >= {RELATED_WORD_MIN} AND l ~ '[a-zа-яё]'", {"text": text}).fetchall()]
+    if not RELATED_LEAST <= len(words) <= RELATED_WORDS_MAX:
+        return []
+    rows = conn.execute(_RELATED_SQL, {
+        "words": words, "floor": RELATED_COMMON_FLOOR, "share": RELATED_COMMON_SHARE, "least": RELATED_LEAST,
+        "part": RELATED_PART, "statuses": list(search._DEFAULT_STATUSES)}).fetchall()
+    return [f"{search._REF_PREFIX[target]}:{record_id}" for target, record_id in rows]
+
+
 def confident(conn, text: str) -> list[str]:
-    """Уверенные находки: записи с маркой из запроса, а без них — единственная находка полнотекстового канала
-    (явный лидер, как у api.pick). Иначе — ничего: подсказка хуже молчания, если она гадает."""
+    """Уверенные находки: записи с маркой из запроса; без них — единственная находка полнотекстового канала
+    (явный лидер, как у api.pick); без неё — записи по теме запроса (related). Иначе — ничего: подсказка хуже
+    молчания, если она гадает."""
     from .. import search
 
     hits: list[str] = []
@@ -383,7 +448,7 @@ def confident(conn, text: str) -> list[str]:
         return hits[:PROMPT_HITS]
     query = " ".join(text.split())[:FTS_QUERY_MAX]
     fts = list(dict.fromkeys(row["ref"] for row in search._fts(conn, query))) if query else []
-    return fts if len(fts) == 1 else []
+    return fts if len(fts) == 1 else related(conn, text)
 
 
 def prompt_submit(conn, prompt) -> str:

@@ -344,6 +344,55 @@ def test_prompt_with_bare_numbers_gives_no_hint(kb, env):
     assert sum(ref in text for ref in written.refs.values()) == hooks.PROMPT_HITS == 3
 
 
+def topic_base(kb):
+    return records.commit(kb, [atom("s1", label="Шаг кронштейнов витража"),
+                               atom("s2", label="Кронштейн витража стальной"),
+                               atom("s3", label="Анкер распорный")], agent=AGENT).refs
+
+
+def test_prompt_on_the_topic_lists_records_that_share_its_words(kb, env):
+    """Марки в запросе нет, а все слова разом не находятся: в подсказке — записи, где есть не меньше половины
+    отличительных слов запроса; выше та, где их больше."""
+    refs = topic_base(kb)
+    out = hooks.run("UserPromptSubmit", event("UserPromptSubmit", prompt="какой шаг кронштейнов у витража на фасаде"),
+                    env)
+    lines = context(out, "UserPromptSubmit").splitlines()
+    assert lines[0] == hooks.FRAME
+    assert refs["@s1"] in lines[1] and refs["@s2"] in lines[2]
+    assert not any(refs["@s3"] in line for line in lines)
+    assert hooks_log(env) == ""
+
+
+def test_prompt_off_the_topic_gives_no_hint_for_one_shared_word(kb, env):
+    """Одно общее слово темы не подтверждает; слова, которых в базе нет, идут в счёт запроса."""
+    topic_base(kb)
+    prompt = "поправь кнопку в интерфейсе настроек, кронштейн тут ни при чём"
+    assert hooks.run("UserPromptSubmit", event("UserPromptSubmit", prompt=prompt), env) == ""
+    assert hooks_log(env) == ""
+
+
+def test_numbers_do_not_count_as_shared_words(kb, env):
+    """«3» и «8» есть и в записи, и в запросе, но темы не называют: общих слов два из пяти — мало."""
+    records.commit(kb, [atom("n1", label="Полка 3 стеллаж 8")], agent=AGENT)
+    prompt = "на полке 3 в стеллаже 8 поменяли стекло и раму"
+    assert hooks.run("UserPromptSubmit", event("UserPromptSubmit", prompt=prompt), env) == ""
+    assert hooks_log(env) == ""
+
+
+def test_related_keeps_silent_on_a_long_prompt(kb, env, monkeypatch):
+    refs = topic_base(kb)
+    conn = hooks._connect(env["AMEMO_DSN"])
+    try:
+        prompt = "шаг кронштейнов витража на фасаде"
+        assert hooks.related(conn, prompt) == [refs["@s1"], refs["@s2"]]
+        assert hooks.related(conn, "кронштейн") == []                      # одно слово — не тема
+        assert hooks.related(conn, f"{prompt} " * 80) == []                # длиннее RELATED_TEXT_MAX
+        monkeypatch.setattr(hooks, "RELATED_WORDS_MAX", 3)
+        assert hooks.related(conn, prompt) == []                           # слов больше RELATED_WORDS_MAX
+    finally:
+        conn.close()
+
+
 # --- Stop ---
 
 def transcript(tmp_path, *tools, name="session.jsonl") -> str:
