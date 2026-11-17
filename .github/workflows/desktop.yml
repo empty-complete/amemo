@@ -324,6 +324,9 @@ jobs:
             [Environment]::SetEnvironmentVariable($pair[0], $pair[1], "User")
             Set-Item "Env:$($pair[0])" $pair[1]
           }
+          # запускатель занят, как при работающем сервере MCP агента (`amemo.exe mcp` под Claude): файл открыт без права
+          # записи, но переименовать его можно — так Windows держит работающий exe. Установщик N+1 должен пройти и так.
+          $held = [IO.File]::Open($amemo, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]"Read, Delete")
           Start-Process $env:APP_EXE -ArgumentList "--background" | Out-Null
           $done = $false
           for ($i = 0; $i -lt 120 -and -not $done; $i++) {
@@ -337,7 +340,9 @@ jobs:
             $done = $installed -eq $nextApp -and $current -eq $next -and $state.runtime -eq $next -and $healthy
           }
           foreach ($name in "AMEMO_UPDATE_URL", "AMEMO_RELEASE_BASE") { [Environment]::SetEnvironmentVariable($name, $null, "User") }
+          $held.Dispose()
           if (-not $done) { throw "обновление до $nextApp не завершилось за 10 минут" }
+          if (-not (Test-Path "$env:APP_DIR\bin\amemo.exe.old1")) { throw "занятый запускатель не переименован в amemo.exe.old1" }
           $after = & $amemo base --json | ConvertFrom-Json
           if ($after.base_id -ne $before.base_id) { throw "после обновления другая база: $($after.base_id), была $($before.base_id)" }
           if (($after.counts | ConvertTo-Json) -ne ($before.counts | ConvertTo-Json)) { throw "после обновления изменились записи: $($after.counts | ConvertTo-Json)" }
