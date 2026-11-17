@@ -99,7 +99,7 @@ def test_version(run):
 def test_usage_errors_exit_2(run):
     assert run()[0] == 2                                        # без команды — справка
     code, _, err = run("search")
-    assert code == 2 and "подсказка: справка: amemo search --help" in err
+    assert code == 2 and "hint: help: amemo search --help" in err
     assert run("nope")[0] == 2
     assert run("review")[0] == 2                                # группа без действия
     assert run("--help")[0] == 0
@@ -108,11 +108,11 @@ def test_usage_errors_exit_2(run):
 
 def test_environment_errors_exit_1_with_hint(run, dsn):
     code, _, err = run("search", "x", extra={"AMEMO_DSN": None})
-    assert code == 1 and "задайте AMEMO_DSN или выполните amemo init" in err
+    assert code == 1 and "set AMEMO_DSN or run amemo init" in err
     code, out, err = run("search", "x", "--json", extra={"AMEMO_DSN": "postgresql://u:p@127.0.0.1:1/none"})
     assert code == 1 and js(out)["code"] == "db_unavailable" and "127.0.0.1:1" not in out
     code, _, err = run("folders", "tree")                       # схема пустая: amemo init не выполнялся
-    assert code == 1 and "выполните amemo init" in err
+    assert code == 1 and "run amemo init" in err
 
 
 def test_bad_settings_exit_2(run):
@@ -413,7 +413,7 @@ def test_submit_rejected_exits_5_with_report(run, kb, tmp_path):
     bad.write_text(json.dumps({"proposals": [{"target": "atom", "payload": {"ref": "@x", "kind": "fact"}}]}),
                    encoding="utf-8")
     code, out, err = run("submit", str(bad))
-    assert code == 5 and "отклонён" in err and "violation" in err and "@x" in err and out == ""
+    assert code == 5 and "rejected the batch" in err and "violation" in err and "@x" in err and out == ""
     code, out, _ = run("submit", str(bad), "--json")
     body = js(out)
     assert code == 5 and body["code"] == "check_rejected" and body["issues"] and body["changeset_id"]
@@ -629,7 +629,7 @@ def test_model_backup_adds_a_copy_but_never_rotates_or_restores(run, pgdb, tmp_p
     old = [b["name"] for b in backup.backups(folder)]
     model = {"AMEMO_DSN": source, "CLAUDECODE": "1"}
     code, _, err = run("backup", "create", "--keep", "1", extra=model)
-    assert code == 2 and "только человек" in err and "подсказка: это действие — для человека" in err
+    assert code == 2 and "только человек" in err and "hint: this action is for a person" in err
     assert [b["name"] for b in backup.backups(folder)] == old
     code, out, err = run("backup", "create", "--json", extra=model)
     assert code == 0, err
@@ -742,7 +742,7 @@ def test_wrong_password_is_told_apart_from_a_stopped_server(run, dsn):
     params["password"] = "не-тот-пароль"
     wrong = make_conninfo(**params)
     code, _, err = run("folders", "tree", extra={"AMEMO_DSN": wrong})
-    assert code == 1 and "проверьте пользователя и пароль в AMEMO_DSN" in err and "не-тот-пароль" not in err
+    assert code == 1 and "check the user and the password in AMEMO_DSN" in err and "не-тот-пароль" not in err
     code, out, _ = run("doctor", extra={"AMEMO_DSN": wrong})
     assert code == 1 and "пользователя и пароль" in out
 
@@ -754,7 +754,7 @@ def test_amemo_debug_prints_traceback_of_internal_error():
             raise RuntimeError("сломалось")
         except RuntimeError as e:
             code = cli.report(e, as_json=False, out=out, err=err, env=env)
-        assert code == 1 and "внутренняя ошибка: RuntimeError: сломалось" in err.getvalue()
+        assert code == 1 and "internal error: RuntimeError: сломалось" in err.getvalue()
         assert ("Traceback" in err.getvalue()) is shown
 
 

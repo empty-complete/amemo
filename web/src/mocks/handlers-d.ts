@@ -63,7 +63,7 @@ function check(proposals: Proposal[]): Issue[] {
       out.push({
         code: "schema",
         severity: "violation",
-        message: "Не по схеме: Extra inputs are not permitted",
+        message: "Does not match the schema: Extra inputs are not permitted",
         path: "scope.folder",
         ref,
       });

@@ -1461,9 +1461,9 @@ def submit(conn: psycopg.Connection, store: ObjectStore, docs: Path | None, *, a
         issues = [_issue(issue) for issue in result.report["issues"]]
         errors = [issue for issue in issues if issue["severity"] == "violation"]
         first = errors[0] if errors else None
-        message = f"пакет отклонён автопроверкой: ошибок {len(errors)}"
+        message = f"the automatic check rejected the batch, errors: {len(errors)}"
         if first is not None:
-            message += f"; первая — {first['ref']}{': ' + first['path'] if first['path'] else ''}: {first['message']}"
+            message += f"; first: {first['ref']}{': ' + first['path'] if first['path'] else ''}: {first['message']}"
         raise CheckRejected(message, changeset_id=str(result.changeset_id), issues=issues, warnings=warnings)
     written = []
     targets = {}

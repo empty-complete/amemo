@@ -45,7 +45,7 @@ VALUES = {"atom": ("content.values[]", "content.values[].qualifiers[]", "qualifi
           "link": ("qualifiers[]",)}
 NAME = re.compile(r"@[a-z0-9_]+")
 UUID7 = re.compile(canon.UUID7)
-WHAT = {"atom": "атом", "entity": "сущность"}
+WHAT = {"atom": "an atom", "entity": "an entity"}
 # название — предмет записи, а не утверждение целиком: длиннее — замечание «сведения» (статус не меняет, в очередь
 # не ставит), чтобы агент перенёс утверждение в текст
 LABEL_MAX = 80
@@ -138,7 +138,7 @@ class _Level1:
         self.report.add(LEVEL, severity, code, where, message, **details)
 
     def schema(self, where: str, loc: list, msg: str) -> None:
-        self.add("violation", "schema", where, f"Не по схеме: {msg}", loc=loc, msg=msg)
+        self.add("violation", "schema", where, f"Does not match the schema: {msg}", loc=loc, msg=msg)
 
     def rules(self, target: str, code: str, *, applied: bool = True) -> Rules:
         if (target, code) not in self.merged:
@@ -158,11 +158,12 @@ class _Level1:
         item = Prepared(label, target, payload, None, None, None, None, False)
         self.items.append(item)
         if target not in MODELS:
-            self.schema(f"{label}: target", [], f"неизвестный вид записи {target!r}: нужен atom или entity")
+            self.schema(f"{label}: target", [], f"unknown record target {target!r}: atom or entity is required")
             return
         if named:
             if ref in self.names:
-                self.schema(f"{label}: ref", ["ref"], f"{ref} уже есть в пачке: у каждой записи своё @имя")
+                self.schema(f"{label}: ref", ["ref"],
+                            f"{ref} is already in the batch: every record needs its own @name")
             else:
                 self.names[ref] = i
         code = payload.get(CODE_FIELD[target]) if isinstance(payload, dict) else None
@@ -184,25 +185,25 @@ class _Level1:
         row = self.conn.execute(f"SELECT status FROM {t} WHERE id = %s", (item.record_id,)).fetchone()
         if row is None:
             ref = f"{PREFIX[t]}:{item.record_id}"
-            self.add("violation", "ref_unknown", f"{item.label}: record_id", f"{ref}: такой записи нет", ref=ref)
+            self.add("violation", "ref_unknown", f"{item.label}: record_id", f"{ref}: no such record", ref=ref)
             return
         item.status = row[0]
         first = self.ids.get((t, item.record_id))
         if first is not None:                  # две ревизии одной записи в пачке: какая из них текущая — неясно
             self.schema(f"{item.label}: record_id", ["record_id"],
-                        f"запись уже правится в этой пачке: {self.items[first].label}")
+                        f"the record is already being revised in this batch: {self.items[first].label}")
             return
         self.ids[(t, item.record_id)] = i
         if item.status in RETIRED:
             self.add("violation", "retired_record", item.label,
-                     f"Запись выведена из оборота (статус {item.status}): сначала верните ей статус",
+                     f"The record is retired (status {item.status}): restore its status first",
                      status=item.status)
 
     def parse(self, model, payload, label: str) -> bool:
         try:
             text = json.dumps(payload, ensure_ascii=False, allow_nan=False)
         except (TypeError, ValueError) as e:
-            self.schema(label, [], f"тело — не JSON: {e}")
+            self.schema(label, [], f"the payload is not JSON: {e}")
             return False
         try:
             model.model_validate_json(text, strict=True)
@@ -246,13 +247,13 @@ class _Level1:
         if node is not None and (expected is None or node.target == expected):
             return node
         if node is not None:
-            problem = f"это {WHAT[node.target]}, а здесь нужна ссылка на {WHAT[expected]}"
+            problem = f"this is {WHAT[node.target]}, but a reference to {WHAT[expected]} is needed here"
         elif ref.startswith("@"):
-            problem = "в пачке нет записи с таким ref"
+            problem = "the batch has no record with this ref"
         elif UUID7.fullmatch(ref.partition(":")[2]):
-            problem = "такой записи нет"
+            problem = "no such record"
         else:
-            problem = f"нет записи с ключом {ref.partition(':')[2]}"
+            problem = f"no record with the key {ref.partition(':')[2]}"
         self.add("violation", "ref_unknown", where, f"{ref}: {problem}", ref=ref)
         self.unresolved.add(where)
         return None
@@ -264,7 +265,7 @@ class _Level1:
         scheme = CODE_FIELD[target]
         if item.code not in self.vocab[scheme]:
             self.add("violation", "unknown_code", f"{label}: {scheme}",
-                     f"{scheme} {item.code!r} — кода нет в загруженных пакетах", scheme=scheme, value=item.code)
+                     f"{scheme} {item.code!r}: the loaded packs have no such code", scheme=scheme, value=item.code)
         for where, selector in canon.values_at(body, "sources[].selectors[]"):
             self.selector_codes(label, where, selector)
         for path, prefix in canon.REF_FIELDS[target].items():
@@ -282,8 +283,9 @@ class _Level1:
         for slot, text in (names.items() if isinstance(names, dict) else []):
             if isinstance(text, str) and len(text) > LABEL_MAX:
                 self.add("info", "label_long", f"{label}: label.{slot}",
-                         f"название — {len(text)} знаков, больше {LABEL_MAX}: в названии — предмет записи (что и по "
-                         "какому документу), утверждение с числами и формулами — в начало текста (body)",
+                         f"the label is {len(text)} characters, more than {LABEL_MAX}: a label names the subject of "
+                         "the record (what and from which document); the claim with its numbers and formulas goes "
+                         "to the start of the body",
                          length=len(text), limit=LABEL_MAX)
 
     def selector_codes(self, label: str, where: str, selector) -> None:
@@ -291,7 +293,8 @@ class _Level1:
             code = selector.get("type")
             if code not in self.vocab["selector_type"]:
                 self.add("violation", "unknown_code", f"{label}: {where}.type",
-                         f"тип селектора {code!r} — кода нет в загруженных пакетах", scheme="selector_type", value=code)
+                         f"selector type {code!r}: the loaded packs have no such code", scheme="selector_type",
+                         value=code)
             selector, where = selector.get("refined_by"), f"{where}.refined_by"
 
     def field_rules(self, label: str, target: str, body: dict, rules: Rules) -> None:
@@ -312,13 +315,13 @@ class _Level1:
     def _rule_required(self, slot: _Slot) -> bool:
         if not slot.rule.get("required") or not _empty(slot.value, slot.range):
             return False
-        self._broken(slot, slot.where, "required", f"Не заполнено поле {slot.where}.")
+        self._broken(slot, slot.where, "required", f"The field {slot.where} is empty.")
         return True
 
     def _rule_min_count(self, slot: _Slot) -> None:
         n = slot.rule.get("min_count")
         if n is not None and _count(slot.value) < n:
-            self._broken(slot, slot.where, "min_count", f"В {slot.where} меньше {n} элементов.")
+            self._broken(slot, slot.where, "min_count", f"{slot.where} has fewer than {n} items.")
 
     def _rule_selector_types(self, slot: _Slot) -> None:
         types = slot.rule.get("selector_types")
@@ -327,7 +330,7 @@ class _Level1:
         for where, selectors in _selector_groups(slot.where, slot.value, slot.range):
             if not any(t in types for s in selectors for t in _chain(s)):
                 self._broken(slot, where, "selector_types",
-                             f"Нет места вида {', '.join(types)} — ни у селектора, ни в его уточнениях refined_by.")
+                             f"No place of type {', '.join(types)}: neither the selector nor its refined_by has one.")
 
     def _rule_entity_classes(self, slot: _Slot) -> None:
         classes = slot.rule.get("entity_classes")
@@ -338,14 +341,14 @@ class _Level1:
                 continue                       # один дефект — одно замечание: ref_unknown уже есть
             node = self.node(ref)
             if node is not None and (node.target != "entity" or node.code not in classes):
-                whose = f"сущность класса {node.code}" if node.target == "entity" else "атом"
+                whose = f"an entity of class {node.code}" if node.target == "entity" else "an atom"
                 self._broken(slot, where, "entity_classes",
-                             f"{ref} — {whose}, а нужна сущность класса {', '.join(classes)}.", ref=ref)
+                             f"{ref} is {whose}, but an entity of class {', '.join(classes)} is needed.", ref=ref)
 
     def _rule_ucum(self, slot: _Slot) -> None:
         if slot.rule.get("ucum") and slot.value is not None and not units.is_ucum(slot.value):
             self._broken(slot, slot.where, "ucum",
-                         f"Единица {slot.value!r} — не код UCUM (с учётом регистра: kPa, mm, W/(m2.K), Cel, 1).",
+                         f"The unit {slot.value!r} is not a UCUM code (case-sensitive: kPa, mm, W/(m2.K), Cel, 1).",
                          unit=slot.value)
 
     def _broken(self, slot: _Slot, where: str, kind: str, default: str, **extra) -> None:
@@ -364,15 +367,15 @@ class _Level1:
                 amount, low, high = v.get("amount"), v.get("lower_bound"), v.get("upper_bound")
                 if v.get("unit") is None and (amount, low, high) != (None, None, None):
                     self.add("violation", "unit_required", f"{label}: {where}.unit",
-                             "Есть значение или граница, но нет единицы; у безразмерной величины единица — 1.")
+                             "There is a value or a bound but no unit; a dimensionless quantity has the unit 1.")
                 bounds = {k: x for k, x in (("amount", amount), ("lower_bound", low), ("upper_bound", high))
                           if x is not None}
                 if low is not None and high is not None and low > high:
                     self.add("violation", "bounds_order", f"{label}: {where}",
-                             f"Нижняя граница {low} больше верхней {high}.", **bounds)
+                             f"The lower bound {low} is greater than the upper bound {high}.", **bounds)
                 elif amount is not None and (low is not None and amount < low or high is not None and amount > high):
                     self.add("violation", "bounds_order", f"{label}: {where}",
-                             f"Значение {amount} вне границ: {_span(low, high)}.", **bounds)
+                             f"The value {amount} is outside the bounds: {_span(low, high)}.", **bounds)
 
     def basis_rules(self, label: str, body: dict) -> None:
         """Основание и уверенность (спецификация 3c, разд. 2.1–2.2): author — слово человека, confidence — оценка
@@ -382,15 +385,15 @@ class _Level1:
         person = self.agent is not None and self.agent.startswith("person:")
         if basis == "author" and model:
             self.add("violation", "basis_author_model", f"{label}: basis",
-                     "Основание basis author («утверждение автора») может поставить только человек (агент person:).",
+                     "Only a person (agent person:) can set basis author — the author's own statement.",
                      basis=basis, agent=self.agent)
         if basis in ("default", "assumed") and not body.get("derived_from"):
             self.add("warning", "basis_without_rule", f"{label}: basis",
-                     f"Основание basis {basis} без derived_from: не видно правила методики, по которому оно принято.",
+                     f"basis {basis} without derived_from: the rule of the method it rests on is not named.",
                      basis=basis)
         if body.get("confidence") is not None and person:
             self.add("violation", "confidence_person", f"{label}: confidence",
-                     "Поле confidence заполняет только модель: у записи человека его нет.", agent=self.agent)
+                     "Only a model fills confidence: a person's record does not have it.", agent=self.agent)
 
     # --- связи ---
 
@@ -403,10 +406,10 @@ class _Level1:
         concept = self.vocab["rel"].get(rel)
         if concept is None:
             self.add("violation", "unknown_code", f"{label}: rel",
-                     f"вид связи {rel!r} — кода нет в загруженных пакетах", scheme="rel", value=rel)
+                     f"link type {rel!r}: the loaded packs have no such code", scheme="rel", value=rel)
         elif concept.get("via_field"):
             self.add("violation", "link_not_allowed", f"{label}: rel",
-                     f"Связь {rel} задаётся полем {concept['via_field']} атома, а не отдельной связью.",
+                     f"The link {rel} is set by the atom field {concept['via_field']}, not by a separate link.",
                      rel=rel, via_field=concept["via_field"])
             concept = None
         src = self.resolve(payload["src"], f"{label}: src")
@@ -418,11 +421,11 @@ class _Level1:
         pairs, pair = concept.get("pairs") or [], f"{src.target}>{dst.target}"
         if pair not in pairs:
             self.add("violation", "link_pair", label,
-                     f"Связь {rel}: {src.target} → {dst.target} не допускается (можно: {', '.join(pairs)}).",
+                     f"The link {rel}: {src.target} → {dst.target} is not allowed (allowed: {', '.join(pairs)}).",
                      rel=rel, pair=pair, pairs=pairs)
             return None
         if src.identity == dst.identity:
-            self.add("violation", "link_pair", label, f"Связь {rel}: запись не может ссылаться на себя.",
+            self.add("violation", "link_pair", label, f"The link {rel}: a record cannot point to itself.",
                      rel=rel, pair=pair, pairs=pairs)
             return None
         return _Link(label, rel, src, dst, bool(concept.get("symmetric")))
@@ -481,7 +484,7 @@ class _Level1:
                 if any(_satisfies(rel, node, req) for rel, node in mine):
                     continue
                 classes = req.get("to_classes")
-                message = f"Нет связи {req['rel']}" + (f" с сущностью класса {', '.join(classes)}" if classes else "")
+                message = f"No link {req['rel']}" + (f" to an entity of class {', '.join(classes)}" if classes else "")
                 self.add(req.get("severity") or "violation", "link_required", item.label, message + ".",
                          template=item.rules.link_origins.get(req["rel"]), rel=req["rel"],
                          **({"to_classes": classes} if classes else {}))
@@ -489,7 +492,7 @@ class _Level1:
     def _not_allowed(self, where: str, rel: str, code: str | None, rules: Rules) -> None:
         allowed = sorted(rules.allowed)
         self.add("violation", "link_not_allowed", where,
-                 f"Связь {rel} не допускается шаблоном {code} (можно: {', '.join(allowed) or 'никакие'}).",
+                 f"The template {code} does not allow the link {rel} (allowed: {', '.join(allowed) or 'none'}).",
                  rel=rel, allowed=allowed)
 
     def stored_links(self, target: str, record_id: uuid.UUID) -> list[tuple[str, _Node]]:
@@ -598,5 +601,5 @@ def _satisfies(rel: str, node: _Node, req: dict) -> bool:
 
 
 def _span(low, high) -> str:
-    return " ".join(part for part in (f"от {low}" if low is not None else "", f"до {high}" if high is not None else "")
-                    if part)
+    parts = (f"from {low}" if low is not None else "", f"to {high}" if high is not None else "")
+    return " ".join(part for part in parts if part)

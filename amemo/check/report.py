@@ -36,11 +36,11 @@ class Report:
 
     def add(self, level: int, severity: str, code: str, where: str, message: str, **details) -> Issue:
         if code not in CODES:
-            raise AssertionError(f"код замечания {code!r} — не из перечня CheckCode")
+            raise AssertionError(f"issue code {code!r} is not in CheckCode")
         if severity not in SEVERITIES:
-            raise AssertionError(f"важность {severity!r} — не из перечня Severity")
+            raise AssertionError(f"severity {severity!r} is not in Severity")
         if level not in LEVELS:
-            raise AssertionError(f"уровень {level!r}: у замечания он от 1 до 4")
+            raise AssertionError(f"level {level!r}: an issue has a level from 1 to 4")
         issue = Issue(level, severity, code, where, message, details)
         self.issues.append(issue)
         return issue
@@ -54,9 +54,9 @@ class Report:
     def summary(self) -> str:
         """Краткая сводка для человека: число замечаний по важности, затем ошибки и предупреждения по строке."""
         if not self.issues:
-            return "Замечаний нет"
+            return "No issues"
         count = {s: sum(i.severity == s for i in self.issues) for s in ("violation", "warning", "info")}
-        head = f"Ошибок: {count['violation']}, предупреждений: {count['warning']}, сведений: {count['info']}"
+        head = f"Errors: {count['violation']}, warnings: {count['warning']}, notes: {count['info']}"
         lines = [f"- {i.severity} {i.code} — {i.where}: {i.message}" for i in self.issues
                  if i.severity != "info" or i.code in ADVICE]
         return "\n".join([head, *lines])

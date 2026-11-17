@@ -322,7 +322,7 @@ def test_two_edits_of_one_record_in_batch(kb):
     ids = existing(kb, atom("@a", sources=None))
     _, issues, report = run(kb, Proposal("atom", atom("@a"), ids["@a"]), Proposal("atom", atom("@b"), str(ids["@a"])))
     assert issues == [("schema", "violation", "@b: record_id")]
-    assert report.issues[0].message.endswith("запись уже правится в этой пачке: @a")
+    assert report.issues[0].message.endswith("the record is already being revised in this batch: @a")
 
 
 @pytest.mark.parametrize("status", ["deprecated", "superseded"])

@@ -1,5 +1,6 @@
 // Документ правки + шаблон вида → предложение check.submit (новая запись или ревизия) и обратно — замечания к полям.
 // Текст — в слот языка (ui/lang): правка — в тот слот, из которого текст показан, новое — в язык интерфейса.
+import { issueText } from "../../api/issues";
 import type { components } from "../../api/schema";
 import { i18n } from "../../app/i18n";
 import { editSlot, hasText, type LangString, pickText, withText } from "../../ui/lang";
@@ -206,6 +207,7 @@ export function issuesToFields(issues: CheckIssue[], t: Template | undefined): F
   const out: FieldIssues = { fields: {}, sources: {}, other: [] };
   for (const i of issues) {
     const p = i.path ?? "";
+    const text = issueText(i);
     const src = p.match(/^sources\[(\d+)\]/);
     const field = t?.form.find(
       (f) =>
@@ -213,11 +215,11 @@ export function issuesToFields(issues: CheckIssue[], t: Template | undefined): F
         p.startsWith(f.path) ||
         (p.startsWith("content.values") && f.path.startsWith("content.values")),
     );
-    if (p.startsWith("label")) out.label = i.message;
-    else if (p.startsWith("body") || p.startsWith("summary_plain")) out.body = i.message;
-    else if (src) out.sources[Number(src[1])] = i.message;
-    else if (field) out.fields[field.key] = i.message;
-    else out.other.push(i.message);
+    if (p.startsWith("label")) out.label = text;
+    else if (p.startsWith("body") || p.startsWith("summary_plain")) out.body = text;
+    else if (src) out.sources[Number(src[1])] = text;
+    else if (field) out.fields[field.key] = text;
+    else out.other.push(text);
   }
   return out;
 }

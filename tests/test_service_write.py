@@ -182,7 +182,7 @@ def test_submit_rejected_is_422_with_issues_that_have_ref_and_path(start, kb):
     assert {i["ref"] for i in body["issues"]} == {"@a", "@b", "proposals[2]"}      # без @имени — номер в теле
     label = next(i for i in body["issues"] if i["ref"] == "@b" and i["code"] == "schema")
     assert label["path"] == "label" and label["severity"] == "violation"
-    assert "ошибок" in body["detail"] and body["warnings"] == []
+    assert "errors" in body["detail"] and body["warnings"] == []
     state = kb.execute("SELECT state FROM changeset WHERE id = %s", (body["changeset_id"],)).fetchone()[0]
     assert state == "rejected"
     assert kb.execute("SELECT count(*) FROM atom").fetchone()[0] == 0

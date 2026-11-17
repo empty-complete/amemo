@@ -116,21 +116,23 @@ def submit(conn: psycopg.Connection, store: ObjectStore, docs: Path | None, prop
                           reason=reason)
     except _Retired as e:
         report.add(1, "violation", "retired_record", e.item.label,
-                   f"Запись вывели из оборота (статус {e.status}) во время проверки: сначала верните ей статус",
+                   f"The record was retired (status {e.status}) during the check: restore its status first",
                    status=e.status)
     except records.RecordError as e:
-        report.add(1, "violation", "record_error", _where(str(e), batch), f"Пакет не записан: {e}", error=str(e))
+        report.add(1, "violation", "record_error", _where(str(e), batch), f"The batch is not written: {e}",
+                   error=str(e))
     return _reject(conn, report, batch, levels, degraded=degraded, agent=agent, activity=activity, reason=reason)
 
 
 def _check_call(conn, proposals: Sequence, links: Sequence, activity) -> None:
     """Проверки вызова — те, что records.commit иначе дал бы поздним отказом без метки записи."""
     if not conn.autocommit:
-        raise CheckError("submit: нужно соединение с autocommit=True (db.connect): иначе запись не фиксируется")
+        raise CheckError("submit: a connection with autocommit=True is required (db.connect): "
+                         "otherwise the write is not committed")
     if not proposals and not links:
-        raise CheckError("submit: пустая пачка — нет ни записей, ни связей")
+        raise CheckError("submit: the batch is empty — no records and no links")
     if activity is not None and conn.execute("SELECT 1 FROM activity WHERE id = %s", (activity,)).fetchone() is None:
-        raise CheckError(f"submit: задачи (activity) {activity} нет")
+        raise CheckError(f"submit: no such activity {activity}")
 
 
 def _where(message: str, batch: Batch) -> str:
@@ -208,7 +210,7 @@ def _write(conn, batch: Batch, plans: list[_Plan], checks: dict[str, list[Source
         t = p.item.target
         row = conn.execute(f"SELECT status FROM {t} WHERE id = %s FOR NO KEY UPDATE", (p.item.record_id,)).fetchone()
         if row is None:
-            raise records.RecordError(f"{p.item.label}: такой записи нет")
+            raise records.RecordError(f"{p.item.label}: no such record")
         p.owner = _owner(conn, t, p.item.record_id)
         _decide(p, row[0])
     for p in plans:
