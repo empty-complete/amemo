@@ -655,9 +655,11 @@ http_headers = { "X-Amemo-Agent" = "model:codex" }
 | Skills | `~/.claude/skills/amemo-*`; project — `.claude/skills/` | `~/.agents/skills/`; project — `.agents/skills/`, plus a block in `AGENTS.md` |
 
 - **Hooks.** `amemo hook SessionStart` adds 3–5 verified atoms about the project (by the git root name) and a
-  reminder; `UserPromptSubmit` adds confident hits for the prompt («amemo first»): at most three, and a bare
-  number is not taken for a code; `PreCompact` asks the summary to list findings worth saving; `Stop` reminds once
-  per session to record findings — only when the session did work and wrote nothing to amemo. At the start the
+  reminder; `UserPromptSubmit` adds confident hits for the prompt («amemo first»): at most three, a bare
+  number is not taken for a code, and without a code a record is added only when it holds at least half of the
+  prompt's distinctive words (a match by words, not by meaning); `PreCompact` asks the summary to list findings
+  worth saving; `Stop` reminds once per session to record findings — only when the session did work and wrote
+  nothing to amemo. At the start the
   agent also learns that semantic search is off, or that the database refuses the connection. A hook reads the
   database directly, fits in 1.5 s, and on any other failure answers nothing with exit code 0. Text from memory
   comes framed as data with its review status, not as instructions.
