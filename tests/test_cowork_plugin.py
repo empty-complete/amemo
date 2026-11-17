@@ -42,10 +42,10 @@ def test_build_writes_a_plugin_zip_with_manifest_server_and_skills(home, env):
     assert set(files) == {".claude-plugin/plugin.json", ".mcp.json", "hooks/hooks.json",
                           *(f"skills/{name}/SKILL.md" for name in platforms.SKILLS),
                           "commands/status.md", "commands/remember.md", "commands/search.md", "commands/verify.md",
-                          "agents/verifier.md"}
+                          "commands/ingest.md", "agents/verifier.md", "agents/ingester.md"}
     # команды /amemo:ИМЯ и помощник: у каждого описание в шапке, путь к amemo подставлен
     for name in ("commands/status.md", "commands/remember.md", "commands/search.md", "commands/verify.md",
-                 "agents/verifier.md"):
+                 "commands/ingest.md", "agents/verifier.md", "agents/ingester.md"):
         assert files[name].startswith("---\n") and "\ndescription: " in files[name] and "{amemo}" not in files[name]
     assert f"`{install.show(install.amemo_command(env)[0])} doctor`" in files["commands/status.md"]
     assert "\nname: verifier\n" in files["agents/verifier.md"]
