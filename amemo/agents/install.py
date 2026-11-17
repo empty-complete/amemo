@@ -48,7 +48,7 @@ from . import platforms
 from .platforms import HOOK_TIMEOUT, SERVER, SKILLS, Layout
 
 BACKUP = ".amemo-backup"
-ALL_EVENTS = ("SessionStart", "UserPromptSubmit", "PreCompact")
+ALL_EVENTS = ("SessionStart", "UserPromptSubmit", "PreCompact", "Stop")
 CLAUDE_TIMEOUT = 60                         # с на `claude mcp add|remove`
 # переменные, которые Codex передаёт серверу MCP из своего окружения (env_vars): база и её пароль — не в config.toml
 CODEX_ENV_VARS = ("AMEMO_DSN", "AMEMO_CONFIG", "AMEMO_STATE", "PGPASSFILE", "PGSERVICE")

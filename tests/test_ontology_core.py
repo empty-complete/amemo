@@ -1,6 +1,7 @@
 """Ядро 1.2.0–1.4.0: заметка, изделие, прямоугольник, has_source со skip_if_set; семья видов (1.3.0);
 ui у decision и parameter (1.4.0); 1.4.1 — только заголовок «Ядро amemo»; 1.4.2 — правила названия
-и текста атома в навыке amemo-remember; 1.4.3 — в amemo-answer: короткие запросы, пока поиск по смыслу выключен."""
+и текста атома в навыке amemo-remember; 1.4.3 — в amemo-answer: короткие запросы, пока поиск по смыслу выключен;
+1.4.4 — в amemo-remember: что исправить при отказе автопроверки и что куда записывать."""
 from amemo import packs
 from amemo.check import templates
 
@@ -12,7 +13,7 @@ def _codes(scheme):
 
 
 def test_core_version():
-    assert CORE.version == "1.4.3"
+    assert CORE.version == "1.4.4"
 
 
 def test_core_new_codes():
