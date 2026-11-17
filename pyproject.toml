@@ -72,7 +72,7 @@ include = ["amemo*"]
 
 [tool.setuptools.package-data]
 amemo = ["schema/*.yaml", "schema/*.json", "sql/*.sql", "packs/core/pack.yaml", "packs/core/vocab/*.yaml", "packs/core/templates/*.yaml",
-        "service/*.yaml", "packs/core/skills/*/SKILL.md"]
+        "service/*.yaml", "packs/core/skills/*/SKILL.md", "agents/plugin/commands/*.md", "agents/plugin/agents/*.md"]
 
 [tool.ruff]
 line-length = 120
