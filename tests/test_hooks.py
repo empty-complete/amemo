@@ -125,14 +125,13 @@ def test_project_found_by_exact_label_and_by_normalized_key(kb, env, tmp_path):
 def test_project_is_not_guessed_from_a_draft_or_a_folder_without_git(kb, env, tmp_path):
     records.commit(kb, [project("alpha", "Альфа"), atom("a1", project="@alpha"),
                         project("beta", "Бета", status="draft"), atom("b1", project="@beta")], agent=AGENT)
-    reminder = "\n".join(hooks.REMINDER)
     # черновик проекта не выбирается ни по ключу, ни по подписи
     assert context(hooks.run("SessionStart", event("SessionStart", cwd=str(git_folder(tmp_path, "beta"))), env),
-                   "SessionStart") == reminder
+                   "SessionStart") == START
     # папка «alpha» без .git — проект по её имени не угадывается
     plain = tmp_path / "plain" / "alpha"
     plain.mkdir(parents=True)
-    assert context(hooks.run("SessionStart", event("SessionStart", cwd=str(plain)), env), "SessionStart") == reminder
+    assert context(hooks.run("SessionStart", event("SessionStart", cwd=str(plain)), env), "SessionStart") == START
     assert hooks.project_root(str(plain)) is None
 
 
