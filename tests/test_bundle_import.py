@@ -151,11 +151,11 @@ def test_pack_missing_refuses_model_and_person_installs_bundled_packs(pg, pg2, m
     with pytest.raises(bundle.BundleError, match="ontology 1.0.0") as e:
         bundle.import_(pg2, store2, tmp_path / "b", agent="model:reader", dry_run=True)
     assert e.value.code == "bundle_pack_missing"
-    assert "AMEMO_PACKS" in str(e.value) and "подборке b" in str(e.value) and "packs/ontology" in str(e.value)
+    assert "AMEMO_PACKS" in str(e.value) and "bundle b" in str(e.value) and "packs/ontology" in str(e.value)
     assert str(tmp_path) not in str(e.value)                 # полного пути на диске в сообщении нет
     assert _count(pg2, "atom") == 0 and _count(pg2, "object") == 0
     got = bundle.import_(pg2, store2, tmp_path / "b", agent=OTHER)
-    assert got.warnings[0] == "поставлены пакеты видов из подборки: ontology 1.0.0"
+    assert got.warnings[0] == "packs of kinds from the bundle are installed: ontology 1.0.0"
     assert (packs.installed_root() / "ontology" / "pack.yaml").is_file()
     assert _count(pg2, "atom") == 2
     db.prepare(pg2)
@@ -373,7 +373,7 @@ def test_level1_violation_refuses_whole_bundle(pg, pg2, monkeypatch, store, stor
     plan = bundle.import_(pg2, store2, tmp_path / "b", agent=OTHER, dry_run=True)        # план — с отчётом
     assert not plan.complete and any(i["code"] == "unit_required" for i in plan.report["issues"])
     assert all(i["where"].startswith("atm:") for i in plan.report["issues"])
-    with pytest.raises(bundle.BundleError, match="уровень 1") as e:
+    with pytest.raises(bundle.BundleError, match="level 1") as e:
         bundle.import_(pg2, store2, tmp_path / "b", agent=OTHER)
     assert any(i["code"] == "unit_required" for i in e.value.details["report"]["issues"])
     assert _count(pg2, "atom") == 0 and _count(pg2, "object") == 0
@@ -437,7 +437,7 @@ def test_link_id_with_other_ends_is_collision(pg, pg2, monkeypatch, store, store
         return {**link, "dst": f"ent:{refs['@s']}", "retired_at": "2026-01-01T00:00:00+00:00"}
 
     _rewrite(tmp_path / "c", "links.jsonl", other_end)
-    with pytest.raises(bundle.BundleError, match="связь") as e:
+    with pytest.raises(bundle.BundleError, match="link") as e:
         bundle.import_(pg2, store2, tmp_path / "c", agent=OTHER)
     assert e.value.code == "bundle_key_collision"
     assert len(lookup.links(pg2, refs["@n"])) == 1                     # связь не выведена из оборота
@@ -472,7 +472,7 @@ def test_history_hash_mismatch_refuses(pg, pg2, monkeypatch, store, store2, docs
         return row
 
     _rewrite(tmp_path / "b", "atoms.jsonl", forge)
-    with pytest.raises(bundle.BundleError, match="история.*content_hash"):
+    with pytest.raises(bundle.BundleError, match="history.*content_hash"):
         bundle.import_(pg2, store2, tmp_path / "b", agent=OTHER)
 
 
@@ -484,7 +484,7 @@ def test_same_file_in_both_bases_is_matched_by_digest(pg, pg2, monkeypatch, stor
     _export(pg, store, tmp_path / "b")
     r = bundle.import_(pg2, store2, tmp_path / "b", agent=OTHER)
     assert r.counts["created"] == 3 and r.counts["objects"] == 0
-    assert any(f"obj:{local.object_id}" in w and "не переносятся" not in w for w in r.warnings)
+    assert any(f"obj:{local.object_id}" in w and "are not carried over" not in w for w in r.warnings)
     got = lookup.get(pg2, "atom", refs["@m"])
     assert (got["sources"][0]["object"], got["sources"][0]["object_version"]) == (f"obj:{local.object_id}", local.n)
     assert got["provenance"]["origin_revision_hash"] == lookup.get(pg, "atom", refs["@m"])["content_hash"]
@@ -578,7 +578,7 @@ def test_link_matched_only_by_ends_is_not_retired(pg, pg2, monkeypatch, store, s
              lambda l: {**l, "id": str(uuid7()), "retired_at": "2026-01-01T00:00:00+00:00"})
     r = bundle.import_(pg2, store2, tmp_path / "c", agent=OTHER)
     assert len(lookup.links(pg2, refs["@n"])) == 1
-    assert any("see_also" in w and "другим id" in w for w in r.warnings)
+    assert any("see_also" in w and "another id" in w for w in r.warnings)
 
 
 def test_exchange_back_and_forth_is_unchanged(pg, pg2, monkeypatch, store, store2, docs, tmp_path):
@@ -863,7 +863,7 @@ def test_own_check_failure_is_bundle_error(pg, pg2, monkeypatch, store, store2, 
         raise StoreError("sources[0]: копии файла нет в хранилище")
 
     monkeypatch.setattr(level2, "judge_source", broken)
-    with pytest.raises(bundle.BundleError, match="своя сверка") as e:
+    with pytest.raises(bundle.BundleError, match="own check") as e:
         bundle.import_(pg2, store2, tmp_path / "b", agent=OTHER)
     assert f"atm:{refs['@m']}" in str(e.value) and "копии файла нет" in str(e.value)
     assert _count(pg2, "atom") == 0 and _count(pg2, "changeset") == 0 and _count(pg2, "object") == 1

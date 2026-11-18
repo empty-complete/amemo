@@ -401,7 +401,7 @@ def test_errors_do_not_show_disk_paths(start, kb, tmp_path):
     client = start(person=True)
     body = problem(upload(client, b"not a zip at all"), 422, "bundle_invalid", "/bundles/inspect", "post")
     no_paths(body, tmp_path)
-    assert body["detail"].startswith(".") and "не читается как zip" in body["detail"]    # имя файла загрузки
+    assert body["detail"].startswith(".") and "not readable as zip" in body["detail"]    # имя файла загрузки
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as z:
         z.writestr("readme.txt", "не подборка")

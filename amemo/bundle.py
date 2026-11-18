@@ -104,9 +104,9 @@ class Selection:
             value = getattr(self, name)
             if isinstance(value, (str, bytes)) or not isinstance(value, (tuple, list)) or \
                     not all(isinstance(v, str) for v in value):
-                raise BundleError(f"Selection.{name}: нужен кортеж строк, получено {value!r}")
+                raise BundleError(f"Selection.{name}: a tuple of strings is required, got {value!r}")
         if self.project is not None and not isinstance(self.project, str):
-            raise BundleError(f"Selection.project: нужна строка ent:…, получено {self.project!r}")
+            raise BundleError(f"Selection.project: a string ent:… is required, got {self.project!r}")
 
     def as_json(self) -> dict:
         out = {}
@@ -121,7 +121,7 @@ def _json(value):
         return value.isoformat()
     if isinstance(value, uuid.UUID):
         return str(value)
-    raise TypeError(f"{type(value).__name__} не переводится в JSON")
+    raise TypeError(f"{type(value).__name__} does not convert to JSON")
 
 
 def _ref_uuid(ref: str) -> uuid.UUID:
@@ -133,7 +133,7 @@ def _resolve(conn, ref: str, allowed: tuple[str, ...]) -> tuple[Target, uuid.UUI
     """Ссылка отбора → вид записи и id; по UUID или ключу; записи нет — BundleError."""
     prefix, _, rest = ref.partition(":") if isinstance(ref, str) else ("", "", "")
     if prefix not in allowed or not rest:
-        raise BundleError(f"{ref!r}: нужна ссылка {' или '.join(p + ':' for p in allowed)}<UUID или ключ>")
+        raise BundleError(f"{ref!r}: a reference {' or '.join(p + ':' for p in allowed)}<UUID or key> is required")
     target = _TARGET[prefix]
     try:
         record_id = uuid.UUID(rest)
@@ -142,7 +142,7 @@ def _resolve(conn, ref: str, allowed: tuple[str, ...]) -> tuple[Target, uuid.UUI
         found_ref = lookup.by_key(conn, target, rest)
         found, record_id = found_ref is not None, _ref_uuid(found_ref) if found_ref else None
     if not found:
-        raise BundleError(f"{ref}: записи нет")
+        raise BundleError(f"{ref}: no such record")
     return target, record_id
 
 
@@ -171,9 +171,9 @@ def _select(conn, s: Selection) -> tuple[set[uuid.UUID], set[uuid.UUID]]:
     """Атомы и сущности по условиям отбора, до замыкания."""
     unknown = set(s.statuses) - set(STATUSES)
     if unknown:
-        raise BundleError(f"statuses: неизвестные статусы {sorted(unknown)}")
+        raise BundleError(f"statuses: unknown statuses {sorted(unknown)}")
     if s.since is not None and (not isinstance(s.since, datetime) or s.since.tzinfo is None):
-        raise BundleError(f"since {s.since!r}: нужно время с часовым поясом")
+        raise BundleError(f"since {s.since!r}: a time with a time zone is required")
     refs: dict[str, list[uuid.UUID]] = {"atom": [], "entity": []}
     for ref in s.refs:
         target, record_id = _resolve(conn, ref, ("atm", "ent"))
@@ -261,7 +261,7 @@ def _closure(conn, s: Selection, atoms: dict[uuid.UUID, dict],
         got = _current(conn, "atom", new_atoms)
         for atom_id in sorted(new_atoms):
             row = got.get(atom_id)
-            why = ("нет действующей ревизии" if row is None else "rejected" if row["status"] == "rejected"
+            why = ("no current revision" if row is None else "rejected" if row["status"] == "rejected"
                    else "private" if not s.include_private and _private(row) else None)
             if why:
                 refused.append(f"atm:{atom_id} ({why})")
@@ -272,8 +272,8 @@ def _closure(conn, s: Selection, atoms: dict[uuid.UUID, dict],
         entities |= got
         fresh += [("entity", row) for row in got.values()]
     if refused:
-        raise BundleError("записи подборки ссылаются на атомы, которые нельзя выгрузить: " + ", ".join(refused)
-                          + " — уберите ссылку из отбора или задайте include_private")
+        raise BundleError("records of the bundle refer to atoms that cannot be exported: " + ", ".join(refused)
+                          + " — remove the reference from the selection or set include_private")
     return atoms, entities
 
 
@@ -355,7 +355,7 @@ def _packs_used(conn, codes: set[tuple[str, str]]) -> tuple[list[dict], list[dic
             found[name] = {"name": name, "version": version, "digest": digest, "requires": requires or {}}
         missing = names - set(found)
         if missing:
-            raise BundleError(f"пакеты {sorted(missing)} не загружены в базу — выполните prepare")
+            raise BundleError(f"the packs {sorted(missing)} are not loaded into the base — run prepare")
         names |= {dep for p in found.values() for dep in p["requires"]}
     if mine.NAME in found:              # версия mine — наибольшая по номеру, а не по часам загрузки (как у as_pack)
         found[mine.NAME] = mine.pack_row(conn)
@@ -390,10 +390,10 @@ def _copy_files(store, objects: list[dict], dst: Path) -> None:
             try:
                 shutil.copyfile(store.content(o["id"], v["n"]), target)
             except (StoreError, OSError) as e:
-                raise BundleError(f"obj:{o['id']} версия {v['n']}: файл не скопирован из хранилища: "
+                raise BundleError(f"obj:{o['id']} version {v['n']}: the file is not copied from the store: "
                                   f"{_reason(e)}") from e
             if _sha256(target) != hexdigest:
-                raise BundleError(f"obj:{o['id']} версия {v['n']}: копия в хранилище не совпадает с digest базы")
+                raise BundleError(f"obj:{o['id']} version {v['n']}: the copy in the store does not match the digest of the base")
 
 
 def _copy_packs(conn, pack_rows: list[dict], dst: Path) -> None:
@@ -405,20 +405,20 @@ def _copy_packs(conn, pack_rows: list[dict], dst: Path) -> None:
         if row["name"] == mine.NAME:
             written = mine.write_pack(conn, dst / mine.NAME)
             if written.version != row["version"]:
-                raise BundleError(f"пакет {mine.NAME}: версия сменилась во время экспорта ({row['version']} → "
-                                  f"{written.version}) — повторите экспорт")
+                raise BundleError(f"pack {mine.NAME}: the version changed during the export ({row['version']} → "
+                                  f"{written.version}) — export again")
             continue
         loaded = by_name.get(row["name"])
         if loaded is None or loaded.version != row["version"] or loaded.digest != row["digest"]:
-            raise BundleError(f"digest пакета {row['name']} {row['version']} в базе не совпадает с папкой пакета "
-                              f"(или пакета нет в AMEMO_PACKS) — обновите базу (prepare)")
+            raise BundleError(f"the digest of the pack {row['name']} {row['version']} in the base does not match the pack folder "
+                              f"(or the pack is not in AMEMO_PACKS) — update the base (prepare)")
         for file in sorted(p for p in loaded.path.rglob("*") if p.is_file() and p.suffix in (".yaml", ".md")):
             target = dst / row["name"] / file.relative_to(loaded.path)
             try:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(file, target)
             except OSError as e:
-                raise BundleError(f"пакет {row['name']}: {file.name} не скопирован: {_reason(e)}") from e
+                raise BundleError(f"pack {row['name']}: {file.name} is not copied: {_reason(e)}") from e
 
 
 def _files(root: Path) -> list[str]:
@@ -455,9 +455,9 @@ def export(conn: psycopg.Connection, *, store, folder: Path, selection: Selectio
     with_packs — копии пакетов, digest которых совпал с базой."""
     folder = Path(folder)
     if folder.exists():
-        raise BundleError(f"{folder.name}: уже есть — подборка пишется в новое место")
+        raise BundleError(f"{folder.name}: already exists — a bundle is written to a new place")
     if with_files and store is None:
-        raise BundleError("with_files: нужно хранилище объектов (store)")
+        raise BundleError("with_files: the object store is required (store)")
     as_zip = folder.suffix == ".zip"
     folder.parent.mkdir(parents=True, exist_ok=True)
     work = folder.parent / f".{folder.name}.{uuid7()}.part"
@@ -479,7 +479,7 @@ def export(conn: psycopg.Connection, *, store, folder: Path, selection: Selectio
         pack_rows, concept_rows = _packs_used(conn, _codes(atom_rows, entity_rows, link_rows))
         base_id = conn.execute("SELECT value FROM meta WHERE key = 'base_id'").fetchone()
         if base_id is None:
-            raise BundleError("у базы нет base_id — выполните prepare")
+            raise BundleError("the base has no base_id — run prepare")
         for name, rows in zip(PARTS, (entity_rows, atom_rows, link_rows, object_rows, source_rows, concept_rows)):
             _write_jsonl(work / name, rows)
         if with_files:
@@ -497,7 +497,7 @@ def export(conn: psycopg.Connection, *, store, folder: Path, selection: Selectio
         try:
             model_v1.BundleManifest.model_validate(manifest)
         except ValidationError as e:
-            raise BundleError(f"манифест подборки не прошёл схему: {e}") from e
+            raise BundleError(f"the manifest of the bundle did not pass the schema: {e}") from e
         # манифест — последним: подборка без него не считается записанной
         (work / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
         if as_zip:
@@ -534,7 +534,7 @@ def _extract(path: Path, dest: Path) -> None:
             _check_zip(path, z.infolist())        # до распаковки: ни байта на диск из вредного архива
             z.extractall(dest)
     except (OSError, zipfile.BadZipFile) as e:
-        raise BundleError(f"{path.name}: не читается как zip: {_reason(e)}") from e
+        raise BundleError(f"{path.name}: not readable as zip: {_reason(e)}") from e
 
 
 def unpack(path: Path, dest: Path) -> Path:
@@ -553,43 +553,43 @@ def unpack(path: Path, dest: Path) -> Path:
 def _check_zip(path: Path, members: list[zipfile.ZipInfo]) -> None:
     """Имена, ссылки и размеры записей архива: вредное — BundleError, не полагаясь на чистку extractall."""
     if len(members) > MAX_MEMBERS:
-        raise BundleError(f"{path.name}: {len(members)} записей в архиве — больше предела {MAX_MEMBERS}")
+        raise BundleError(f"{path.name}: {len(members)} entries in the archive — over the limit of {MAX_MEMBERS}")
     total = 0
     for m in members:
         name = m.filename
         parts = PurePosixPath(name).parts
         if (not name or "\\" in name or "\0" in name or name.startswith("/") or ".." in parts
                 or (len(name) > 1 and name[1] == ":")):
-            raise BundleError(f"{path.name}: недопустимое имя в архиве {name!r}")
+            raise BundleError(f"{path.name}: a name that is not allowed in the archive {name!r}")
         if (m.external_attr >> 16) & 0o170000 == 0o120000:
-            raise BundleError(f"{path.name}: {name} — символическая ссылка, в подборке их не бывает")
+            raise BundleError(f"{path.name}: {name} is a symbolic link, a bundle has none")
         total += m.file_size
         if total > MAX_UNPACKED:
-            raise BundleError(f"{path.name}: распакованный размер больше предела {MAX_UNPACKED} байт")
+            raise BundleError(f"{path.name}: the unpacked size is over the limit of {MAX_UNPACKED} bytes")
         if m.file_size > RATIO_FROM and m.file_size > MAX_RATIO * max(m.compress_size, 1):
-            raise BundleError(f"{path.name}: {name} сжат больше {MAX_RATIO}:1 — похоже на zip-бомбу")
+            raise BundleError(f"{path.name}: {name} is compressed over {MAX_RATIO}:1 — looks like a zip bomb")
 
 
 def _manifest(root: Path, label: Path) -> dict:
     try:
         manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
     except FileNotFoundError:
-        raise BundleError(f"{label.name}: нет manifest.json — это не подборка или она записана не до конца") from None
+        raise BundleError(f"{label.name}: no manifest.json — this is not a bundle, or it was not written to the end") from None
     except (OSError, ValueError) as e:
-        raise BundleError(f"{label.name}/manifest.json: не читается: {_reason(e)}") from e
+        raise BundleError(f"{label.name}/manifest.json: not readable: {_reason(e)}") from e
     if not isinstance(manifest, dict) or manifest.get("format") != FORMAT:
         got = manifest.get("format") if isinstance(manifest, dict) else None
-        raise BundleError(f"{label.name}: формат {got!r}, ожидается {FORMAT}")
+        raise BundleError(f"{label.name}: the format is {got!r}, {FORMAT} is expected")
     try:
         model_v1.BundleManifest.model_validate(manifest)
     except ValidationError as e:
         raise BundleError(f"{label.name}/manifest.json: {e}") from e
     if not isinstance(manifest["parts"], dict):
-        raise BundleError(f"{label.name}/manifest.json: parts — не словарь")
+        raise BundleError(f"{label.name}/manifest.json: parts is not a mapping")
     for name in manifest["parts"]:
         p = PurePosixPath(name)
         if not isinstance(name, str) or p.is_absolute() or ".." in p.parts or name == "manifest.json":
-            raise BundleError(f"{label.name}/manifest.json: недопустимый путь части {name!r}")
+            raise BundleError(f"{label.name}/manifest.json: a part path that is not allowed {name!r}")
     return manifest
 
 
@@ -683,9 +683,9 @@ def _read_jsonl(root: Path, name: str) -> list[dict]:
         try:
             row = json.loads(line)
         except ValueError as e:
-            raise BundleError(f"{name}: строка {i} — не JSON: {e}") from e
+            raise BundleError(f"{name}: line {i} is not JSON: {e}") from e
         if not isinstance(row, dict):
-            raise BundleError(f"{name}: строка {i} — не объект JSON")
+            raise BundleError(f"{name}: line {i} is not a JSON object")
         rows.append(row)
     return rows
 
@@ -711,9 +711,9 @@ def install_packs(conn, manifest: dict, root: Path, folder: Path) -> list[str]:
         try:
             loaded = packs.load_pack(src)
         except packs.PackError as e:
-            raise BundleError(f"{folder.name}: пакет {name} в подборке не загружается: {e}") from e
+            raise BundleError(f"{folder.name}: the pack {name} of the bundle does not load: {e}") from e
         if (loaded.name, loaded.version, loaded.digest) != (name, version, digest):
-            raise BundleError(f"{folder.name}: пакет {name} в подборке не совпадает с манифестом (версия или digest)")
+            raise BundleError(f"{folder.name}: the pack {name} of the bundle does not match the manifest (version or digest)")
         todo.append((name, version, src))
     if not todo:
         return []
@@ -722,7 +722,7 @@ def install_packs(conn, manifest: dict, root: Path, folder: Path) -> list[str]:
     try:
         packs.load_packs([*current, *(src for _, _, src in todo)])
     except packs.PackError as e:
-        raise BundleError(f"{folder.name}: пакеты подборки не сочетаются с загруженными: {e}") from e
+        raise BundleError(f"{folder.name}: packs of the bundle do not fit the loaded ones: {e}") from e
     target.mkdir(parents=True, exist_ok=True)
     moved: list[tuple[Path, Path | None]] = []
     try:
@@ -744,7 +744,7 @@ def install_packs(conn, manifest: dict, root: Path, folder: Path) -> list[str]:
         for part in target.glob(".*.part"):
             shutil.rmtree(part, ignore_errors=True)
         if isinstance(e, (OSError, packs.PackError)) or type(e).__name__ == "MigrationError":
-            raise BundleError(f"{folder.name}: пакеты подборки не поставлены: {_reason(e)}") from e
+            raise BundleError(f"{folder.name}: packs of the bundle are not installed: {_reason(e)}") from e
         raise
     for _, old in moved:
         if old is not None:
@@ -765,7 +765,7 @@ def _check_packs(conn, manifest: dict, root: Path, folder: Path) -> list[tuple]:
     kinds: list[tuple] = []
     for p in manifest["packs"]:
         if not isinstance(p, dict):
-            raise BundleError(f"{folder.name}/manifest.json: пакет {p!r} — не объект")
+            raise BundleError(f"{folder.name}/manifest.json: the pack {p!r} is not an object")
         name, version, digest = p.get("name"), p.get("version"), p.get("digest")
         got = have.get((name, version))
         if got is not None and got == digest:
@@ -779,41 +779,41 @@ def _check_packs(conn, manifest: dict, root: Path, folder: Path) -> list[tuple]:
                 continue
             if digest in {d for (n, _), d in have.items() if n == mine.NAME}:
                 continue
-            missing.append(f"{name} {version} (свои виды базы-источника: экспортируйте подборку с пакетами — "
+            missing.append(f"{name} {version} (own kinds of the source base: export the bundle with packs — "
                            f"with_packs)")
             continue
-        why = ("загружен с другим digest" if got is not None else
-               f"загружена версия {latest[name]}" if name in latest else "не загружен")
+        why = ("loaded with another digest" if got is not None else
+               f"version {latest[name]} is loaded" if name in latest else "not loaded")
         missing.append(f"{name} {version} ({why})")
         names.append(name)
     if not missing:
         return kinds
     bundled = [n for n in names if isinstance(n, str) and (root / "packs" / n / "pack.yaml").is_file()]
     if not names:                                        # недостаёт только своих видов: AMEMO_PACKS не поможет
-        raise BundleError("не загружены пакеты подборки: " + "; ".join(missing), code="bundle_pack_missing",
+        raise BundleError("packs of the bundle are not loaded: " + "; ".join(missing), code="bundle_pack_missing",
                           missing=missing)
     if bundled and folder.suffix == ".zip":
-        hint = "; пакеты лежат в подборке (packs/): распакуйте её, добавьте их папки в AMEMO_PACKS и выполните prepare"
+        hint = "; the packs are in the bundle (packs/): unpack it, add their folders to AMEMO_PACKS and run prepare"
     elif bundled:
-        hint = (f"; пакеты лежат в подборке {folder.name}: добавьте в AMEMO_PACKS её папки "
-                f"{', '.join('packs/' + n for n in bundled)} и выполните prepare")
+        hint = (f"; the packs are in the bundle {folder.name}: add to AMEMO_PACKS its folders "
+                f"{', '.join('packs/' + n for n in bundled)} and run prepare")
     else:
-        hint = "; добавьте папки пакетов в AMEMO_PACKS и выполните prepare"
-    raise BundleError("не загружены пакеты подборки: " + "; ".join(missing) + hint, code="bundle_pack_missing",
+        hint = "; add the pack folders to AMEMO_PACKS and run prepare"
+    raise BundleError("packs of the bundle are not loaded: " + "; ".join(missing) + hint, code="bundle_pack_missing",
                       missing=missing)
 
 
 def _check_hash(payload, content_hash, where: str) -> None:
     """Хэш тела совпадает с content_hash ревизии: иначе подборка повреждена или изменена после экспорта."""
     if not isinstance(payload, dict) or not isinstance(content_hash, str):
-        raise BundleError(f"{where}: ревизия без тела или хэша")
+        raise BundleError(f"{where}: a revision without a body or a hash")
     try:
         same = canon.content_hash(payload) == content_hash
     except canon.CanonError as e:
-        raise BundleError(f"{where}: тело ревизии не приводится к канонической форме: {e}") from e
+        raise BundleError(f"{where}: the body of the revision does not reduce to the canonical form: {e}") from e
     if not same:
-        raise BundleError(f"{where}: content_hash не совпадает с телом ревизии — подборка повреждена или "
-                          "изменена после экспорта")
+        raise BundleError(f"{where}: content_hash does not match the body of the revision — the bundle is damaged or "
+                          "was changed after the export")
 
 
 def _check_row(target: Target, row: dict, part: str) -> uuid.UUID:
@@ -822,18 +822,18 @@ def _check_row(target: Target, row: dict, part: str) -> uuid.UUID:
         record_id = uuid.UUID(row["id"])
         rev = row["revision"]
         if not isinstance(rev["id"], str):
-            raise TypeError("ревизия без id")
+            raise TypeError("a revision without an id")
         history = row.get("history") or []
         if not isinstance(history, list) or not all(isinstance(h, dict) for h in history):
-            raise TypeError("history — не список ревизий")
+            raise TypeError("history is not a list of revisions")
     except (KeyError, TypeError, ValueError, AttributeError) as e:
-        raise BundleError(f"{part}: запись {row.get('id')!r} — неполная строка ({e})") from e
+        raise BundleError(f"{part}: record {row.get('id')!r} — an incomplete line ({e})") from e
     ref = f"{PREFIX[target]}:{record_id}"
     if row.get("status") not in STATUSES:
-        raise BundleError(f"{part}: {ref}: статус {row.get('status')!r} — не из перечня")
+        raise BundleError(f"{part}: {ref}: the status {row.get('status')!r} is not in the list")
     _check_hash(rev.get("payload"), rev.get("content_hash"), f"{part}: {ref}")
     for h in history:
-        _check_hash(h.get("payload"), h.get("content_hash"), f"{part}: {ref}: история, ревизия {h.get('n')}")
+        _check_hash(h.get("payload"), h.get("content_hash"), f"{part}: {ref}: history, revision {h.get('n')}")
     return record_id
 
 
@@ -932,7 +932,7 @@ def _plan_objects(conn, store, rows: list[dict], referenced: set[SourceKey], fil
         try:
             object_id = objects.object_uuid(o.get("id", ""))
         except ValueError as e:
-            raise BundleError(f"objects.jsonl: объект {o.get('id')!r}: {e}") from e
+            raise BundleError(f"objects.jsonl: object {o.get('id')!r}: {e}") from e
         ref = f"obj:{object_id}"
         record = {k: v for k, v in o.items() if k != "status"}
         if conn.execute("SELECT 1 FROM object WHERE id = %s", (object_id,)).fetchone() is not None:
@@ -947,18 +947,18 @@ def _plan_objects(conn, store, rows: list[dict], referenced: set[SourceKey], fil
         targets = sorted({oid for oid, _ in found.values()})
         lost = sorted(n for r, n in referenced if r == ref and n not in found)
         if len(targets) > 1 or lost:
-            why = (f"версии ведут на разные локальные объекты {', '.join(f'obj:{t}' for t in targets)}"
-                   if len(targets) > 1 else f"нет локальных версий {lost}, на которые ссылаются источники")
-            raise BundleError(f"{ref}: объект подборки совпал с базой лишь частично — {why}",
+            why = (f"versions lead to different local objects {', '.join(f'obj:{t}' for t in targets)}"
+                   if len(targets) > 1 else f"no local versions {lost} that sources refer to")
+            raise BundleError(f"{ref}: the object of the bundle matched the base only in part — {why}",
                               code="bundle_object_conflict", object=ref, local=[f"obj:{t}" for t in targets], lost=lost)
         for n, (oid, m) in found.items():
             vmap[(ref, n)] = (f"obj:{oid}", m)
         what = o.get("url") or o.get("original_name") or ""
         others = sorted(n for n in (v.get("n") for v in o.get("versions") or [] if isinstance(v, dict))
                         if n not in found)
-        warnings.append(f"{ref}: {o.get('kind')} {what!r} уже есть в базе как obj:{targets[0]} — источники подборки "
-                        "ссылаются на него" + (f"; версии {others}, на которые источники не ссылаются и которых в "
-                                               "базе нет, не переносятся" if others else ""))
+        warnings.append(f"{ref}: {o.get('kind')} {what!r} is already in the base as obj:{targets[0]} — sources of the bundle "
+                        "refer to it" + (f"; versions {others}, which sources do not refer to and the "
+                                               "base does not have, are not carried over" if others else ""))
     return adopt, vmap, new
 
 
@@ -976,15 +976,15 @@ def _plan_record(conn, rec: _Rec, vmap: dict[SourceKey, SourceKey], *, origin_ba
     try:
         keys = {incoming_hash, canon.content_hash(_without_origin(raw)), canon.content_hash(_without_origin(incoming))}
     except canon.CanonError as e:
-        raise BundleError(f"{rec.ref}: тело ревизии не приводится к канонической форме: {e}") from e
+        raise BundleError(f"{rec.ref}: the body of the revision does not reduce to the canonical form: {e}") from e
     key = rec.row.get("key")
     local = conn.execute(f"SELECT status, key FROM {t} WHERE id = %s", (rec.record_id,)).fetchone()
     if local is not None and local[1] and key and local[1] != key:
-        collisions.append(f"{rec.ref}: локальный ключ {local[1]}, в подборке {key}")
+        collisions.append(f"{rec.ref}: the local key is {local[1]}, in the bundle {key}")
     if key:
         owner = lookup.by_key(conn, t, key)
         if owner is not None and owner != rec.ref:
-            collisions.append(f"{t} {key}: локально {owner}, в подборке {rec.ref}")
+            collisions.append(f"{t} {key}: locally {owner}, in the bundle {rec.ref}")
     body = dict(incoming)
     if t == "atom" and origin_base != own_base:          # provenance — только у атома (схема сущности его не знает)
         body["provenance"] = {**(incoming.get("provenance") or {}), "origin_base": origin_base,
@@ -998,7 +998,7 @@ def _plan_record(conn, rec: _Rec, vmap: dict[SourceKey, SourceKey], *, origin_ba
         return
     if local[0] in RETIRED:
         rec.action = "skipped"
-        warnings.append(f"{rec.ref}: локально {local[0]} — подборка её не меняет: вывод из оборота решается здесь")
+        warnings.append(f"{rec.ref}: locally {local[0]} — the bundle does not change it: retiring is decided here")
         return
     if keys & _local_keys(conn, t, rec.record_id):
         rec.action = "unchanged"
@@ -1055,7 +1055,7 @@ def _link_ends(conn, link: dict) -> tuple[str, uuid.UUID, uuid.UUID, bool]:
         rel, src, dst = link["rel"], _ref_uuid(link["src"]), _ref_uuid(link["dst"])
         uuid.UUID(link["id"])
     except (KeyError, TypeError, ValueError, AttributeError, IndexError) as e:
-        raise BundleError(f"links.jsonl: связь {link.get('id')!r} — неполная строка ({e})") from e
+        raise BundleError(f"links.jsonl: link {link.get('id')!r} — an incomplete line ({e})") from e
     data = conn.execute("SELECT data FROM concept WHERE scheme = 'rel' AND code = %s", (rel,)).fetchone()
     return rel, src, dst, bool(data and data[0].get("symmetric"))
 
@@ -1074,11 +1074,11 @@ def _plan_links(conn, rows: list[dict], warnings: list[str],
         rel, src, dst, symmetric = _link_ends(conn, link)
         retired = link.get("retired_at") is not None
         ends = [(src, dst)] + ([(dst, src)] if symmetric else [])
-        where = f"связь {rel} {link['src']} → {link['dst']}"
+        where = f"link {rel} {link['src']} → {link['dst']}"
         row = conn.execute("SELECT id, retired_at, rel, coalesce(src_atom, src_entity), coalesce(dst_atom, dst_entity) "
                            "FROM link WHERE id = %s", (link["id"],)).fetchone()
         if row is not None and (row[2] != rel or (row[3], row[4]) not in ends):
-            collisions.append(f"связь {link['id']}: локально {row[2]} {row[3]} → {row[4]}, в подборке {rel} "
+            collisions.append(f"link {link['id']}: locally {row[2]} {row[3]} → {row[4]}, in the bundle {rel} "
                               f"{src} → {dst}")
             continue
         mine = row[:2] if row is not None else None
@@ -1089,8 +1089,8 @@ def _plan_links(conn, rows: list[dict], warnings: list[str],
             active = [r for r in same if r[1] is None]
             other = active[0] if active else same[0] if same else None
             if other is not None and retired and other[1] is None:
-                warnings.append(f"{where}: в подборке выведена, но локальная связь с теми же rel и концами — под "
-                                f"другим id ({other[0]}): не выводится")
+                warnings.append(f"{where}: retired in the bundle, but the local link with the same rel and ends has "
+                                f"another id ({other[0]}): it is not retired")
                 continue
             mine = other
         if mine is None:
@@ -1100,7 +1100,7 @@ def _plan_links(conn, rows: list[dict], warnings: list[str],
         elif retired and mine[1] is None:
             retire.append(mine[0])
         elif not retired and mine[1] is not None:
-            warnings.append(f"{where}: локально выведена из оборота — остаётся выведенной")
+            warnings.append(f"{where}: retired locally — it stays retired")
     return create, retire
 
 
@@ -1147,7 +1147,7 @@ def _history_rows(conn, recs: list[_Rec], origin_base: str) -> list[tuple]:
                 out.append((r.target, r.record_id, int(h["n"]), h["content_hash"], h["payload"], h["recorded_at"],
                             h.get("agent")))
             except (KeyError, TypeError, ValueError) as e:
-                raise BundleError(f"{r.ref}: ревизия истории — неполная строка ({e})") from e
+                raise BundleError(f"{r.ref}: a revision of the history — an incomplete line ({e})") from e
             have.add(h["n"])
     return out
 
@@ -1189,7 +1189,7 @@ def _apply_checks(conn, rec: _Rec, at: datetime, warnings: list[str]) -> None:
     t = rec.target
     for position, verdict, page, anchor in rec.checks:
         if verdict in SHAKY or verdict == "no_file":
-            warnings.append(f"{rec.ref}: sources[{position}]: своя сверка с файлом — {verdict}")
+            warnings.append(f"{rec.ref}: sources[{position}]: own check against the file — {verdict}")
         conn.execute(f"UPDATE source SET verdict = %s, page = %s, anchor = %s, checked_at = %s "
                      f"WHERE {t}_revision_id = %s AND position = %s",
                      (verdict, page, anchor, at, rec.revision.revision_id, position))
@@ -1219,10 +1219,10 @@ def _concept_problem(concept: dict) -> str | None:
     try:
         model_v1.Concept.model_validate_json(json.dumps(concept, ensure_ascii=False), strict=True)
     except ValidationError as e:
-        return f"не по схеме Concept ({e.error_count()} ошибок: {e.errors()[0]['msg']})"
+        return f"does not match the Concept schema ({e.error_count()} errors: {e.errors()[0]['msg']})"
     unit = concept.get("unit")
     if unit is not None and not units.is_ucum(unit):
-        return f"единица {unit!r} — не код UCUM"
+        return f"the unit {unit!r} is not a UCUM code"
     return None
 
 
@@ -1277,16 +1277,16 @@ def import_(conn: psycopg.Connection, store, folder: Path, *, agent: str, trust:
     меняется. dry_run — план без записи: счётчики, предупреждения, коллизии (вместо отказа) и отчёт уровня 1.
     zip распаковывается во временную папку в tmp_dir (opened)."""
     if not conn.autocommit:
-        raise BundleError("import_: нужно соединение с autocommit=True (db.connect): иначе приём объектов и запись "
-                          "не фиксируются")
+        raise BundleError("import_: a connection with autocommit=True is required (db.connect): otherwise taking objects in and the write "
+                          "are not committed")
     if trust not in TRUST:
-        raise BundleError(f"trust: {trust!r} — ожидается keep или review")
+        raise BundleError(f"trust: {trust!r} — keep or review is expected")
     folder = Path(folder)
     with opened(folder, tmp_dir=tmp_dir) as root:
         manifest = _manifest(root, folder)
         damaged = _damaged(root, manifest)
         if damaged:
-            raise BundleError(f"{folder.name}: повреждены части подборки: {', '.join(damaged)}", code=DAMAGED,
+            raise BundleError(f"{folder.name}: parts of the bundle are damaged: {', '.join(damaged)}", code=DAMAGED,
                               damaged=damaged)
         installed: list[str] = []
         try:
@@ -1301,7 +1301,7 @@ def import_(conn: psycopg.Connection, store, folder: Path, *, agent: str, trust:
             kinds = _check_packs(conn, manifest, root, folder)
         own = conn.execute("SELECT value FROM meta WHERE key = 'base_id'").fetchone()
         if own is None:
-            raise BundleError("у базы нет base_id — выполните prepare")
+            raise BundleError("the base has no base_id — run prepare")
         own_base, origin_base = own[0], manifest["base_id"]
         recs = [_Rec(target, row, _check_row(target, row, part))
                 for target, part in (("entity", "entities.jsonl"), ("atom", "atoms.jsonl"))
@@ -1310,7 +1310,7 @@ def import_(conn: psycopg.Connection, store, folder: Path, *, agent: str, trust:
         concepts = _read_jsonl(root, "concepts.jsonl")
         files = {f"sha256:{PurePosixPath(n).name}": root / n for n in manifest["parts"]
                  if n.startswith("objects/sha256/")}
-        warnings: list[str] = [f"поставлены пакеты видов из подборки: {', '.join(installed)}"] if installed else []
+        warnings: list[str] = [f"packs of kinds from the bundle are installed: {', '.join(installed)}"] if installed else []
         new_kinds, pack_collisions = mine.compare(conn, kinds) if kinds else ([], [])
         kinds = [k for k in kinds if k[0].code in new_kinds]
         collisions: list[str] = list(pack_collisions)
@@ -1336,17 +1336,17 @@ def import_(conn: psycopg.Connection, store, folder: Path, *, agent: str, trust:
             return Imported(None, counts, warnings=warnings, collisions=collisions, report=_report_json(report, names),
                             complete=not collisions and not report.has_violations(), kinds=new_kinds)
         if pack_collisions:
-            raise BundleError("свои виды подборки расходятся с базой: " + "; ".join(pack_collisions),
+            raise BundleError("own kinds of the bundle differ from the base: " + "; ".join(pack_collisions),
                               code=PACK_CONFLICT, collisions=pack_collisions)
         if kinds and not person:
-            raise mine.MineError(f"свои виды из подборки ({', '.join(new_kinds)}) добавляет только человек (person:), "
-                                 f"а не {agent}", code="forbidden")
+            raise mine.MineError(f"only a person (person:) adds own kinds from a bundle ({', '.join(new_kinds)}), "
+                                 f"not {agent}", code="forbidden")
         if collisions:
-            raise BundleError("коллизии ключей и id связей: " + "; ".join(collisions), code="bundle_key_collision",
+            raise BundleError("collisions of keys and link ids: " + "; ".join(collisions), code="bundle_key_collision",
                               collisions=collisions)
         if report.has_violations():
             text = _NAME.sub(lambda m: names.get(m[0], m[0]), report.summary())
-            raise BundleError("подборка не прошла уровень 1:\n" + text, code=LEVEL1,
+            raise BundleError("the bundle did not pass level 1:\n" + text, code=LEVEL1,
                               report=_report_json(report, names))
         # история — только у подборки with_history и только чужая: своя история и так в базе
         history = (_history_rows(conn, recs, origin_base) if manifest["with_history"] and origin_base != own_base
@@ -1357,15 +1357,15 @@ def import_(conn: psycopg.Connection, store, folder: Path, *, agent: str, trust:
             try:
                 warnings.extend(objects.adopt(conn, store, record, files=files, agent=agent))
             except (objects.ObjectError, StoreError) as e:
-                raise BundleError(f"подборка не принята: {e}") from e
+                raise BundleError(f"the bundle is not accepted: {e}") from e
         for rec in recs:
             if rec.body is None:
                 continue
             try:
                 _own_check(conn, store, rec)
             except (objects.ObjectError, StoreError) as e:
-                raise BundleError(f"подборка не записана: {rec.ref}: своя сверка источников не выполнена ({e}); "
-                                  "принятые объекты остаются") from e
+                raise BundleError(f"the bundle is not written: {rec.ref}: own check of the sources is not done ({e}); "
+                                  "the objects taken in stay") from e
         try:
             with conn.transaction():
                 if kinds:                                    # свои виды — до записей: записи их видов проверяются
@@ -1374,14 +1374,14 @@ def import_(conn: psycopg.Connection, store, folder: Path, *, agent: str, trust:
                                     agent=agent, origin_base=origin_base,
                                     reason=f"import {origin_base} {manifest['created_at']}")
         except objects.ObjectError as e:                     # отметка объекта (objects.mark)
-            raise BundleError(f"подборка не принята: {e}") from e
+            raise BundleError(f"the bundle is not accepted: {e}") from e
         except RecordError as e:
             # ключ, занятый между планом и записью (records ловит UniqueViolation ключа и называет его)
             taken = isinstance(e.__cause__, psycopg.errors.UniqueViolation)
-            raise BundleError(f"подборка не записана: {e}", code="bundle_key_collision" if taken else None) from e
+            raise BundleError(f"the bundle is not written: {e}", code="bundle_key_collision" if taken else None) from e
         except psycopg.errors.IntegrityError as e:            # ограничение таблицы, которое план не предвидел
             taken = isinstance(e, psycopg.errors.UniqueViolation)
-            raise BundleError(f"подборка не записана: {e.diag.message_primary}",
+            raise BundleError(f"the bundle is not written: {e.diag.message_primary}",
                               code="bundle_key_collision" if taken else None) from e
     _place(conn, recs, agent, warnings)
     return Imported(cs, counts, queued=queued, warnings=warnings, report=_report_json(report, names),
@@ -1400,7 +1400,7 @@ def _place(conn, recs: list[_Rec], agent: str, warnings: list[str]) -> None:
         try:
             folders.move(conn, rec.ref, path, agent=agent)
         except (folders.FolderError, RecordError) as e:
-            warnings.append(f"{rec.ref}: папка {path!r} не поставлена: {e}")
+            warnings.append(f"{rec.ref}: the folder {path!r} is not set: {e}")
 
 
 class _Trial(Exception):
@@ -1414,7 +1414,7 @@ def _adopt_kinds(conn, kinds: list[tuple], *, agent: str, dry_run: bool = False)
     except mine.MineError as e:
         if e.code == "forbidden":
             raise
-        raise BundleError(f"свои виды подборки не встают в базу: {e}", code=PACK_CONFLICT,
+        raise BundleError(f"own kinds of the bundle do not go into the base: {e}", code=PACK_CONFLICT,
                           collisions=[str(e)]) from e
 
 
@@ -1455,26 +1455,26 @@ def _write(conn, recs: list[_Rec], new_links: list[dict], retire: list[uuid.UUID
             note = f"{mark['note']} ({origin})" if mark.get("note") else origin
             objects.mark(conn, o["id"], mark.get("status"), agent=agent, note=note)
         elif local["status"] != mark.get("status"):
-            warnings.append(f"obj:{o['id']}: отметка {local['status']} локальная, в подборке {mark.get('status')} — "
-                            "остаётся локальная")
+            warnings.append(f"obj:{o['id']}: the mark {local['status']} is local, in the bundle {mark.get('status')} — "
+                            "the local one stays")
     for c in concepts:
         scheme, code = c.get("scheme"), c.get("code")
         if not isinstance(scheme, str) or not isinstance(code, str):
             continue
         if scheme not in CONCEPT_SCHEMES:
             # виды, классы, связи — словари пакетов: подборка их не ставит, иначе обошла бы проверку пакетов
-            warnings.append(f"понятие {scheme}.{code}: схема {scheme} не принимается из подборки — пропущено")
+            warnings.append(f"concept {scheme}.{code}: the scheme {scheme} is not accepted from a bundle — skipped")
             continue
         problem = _concept_problem(c)
         if problem:
-            warnings.append(f"понятие {scheme}.{code}: {problem} — пропущено")
+            warnings.append(f"concept {scheme}.{code}: {problem} — skipped")
             continue
         row = conn.execute("SELECT data FROM concept WHERE scheme = %s AND code = %s", (scheme, code)).fetchone()
         if row is None:
             conn.execute("INSERT INTO concept (scheme, code, data, origin, updated_at) VALUES (%s, %s, %s, 'agent', "
                          "now())", (scheme, code, Jsonb(c)))
         elif row[0] != c:
-            warnings.append(f"понятие {scheme}.{code} отличается от локального — остаётся локальное")
+            warnings.append(f"concept {scheme}.{code} differs from the local one — the local one stays")
     writing = [r for r in recs if r.body is not None]
     items = [records.Item(r.target, r.body, record_id=r.record_id, status=r.status if r.action == "created" else None,
                           review_state="none" if r.action == "created" else "pending") for r in writing]
