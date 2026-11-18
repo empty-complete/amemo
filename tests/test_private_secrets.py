@@ -72,7 +72,7 @@ def test_submit_warns_secret_like_without_the_value(start, kb):
     assert ("secret_like", "@a", "summary_plain.ru") in secrets
     assert ("secret_like", "", "reason") in secrets
     assert key not in response.text and "Hunter2024" not in response.text and "Qwerty123!" not in response.text
-    assert all("токен GitHub" in w["message"] for w in found["warnings"] if w["path"] == "summary_plain.ru")
+    assert all("GitHub token" in w["message"] for w in found["warnings"] if w["path"] == "summary_plain.ru")
 
 
 def test_submit_with_secret_is_written_not_rejected(start, kb):

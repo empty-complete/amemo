@@ -143,7 +143,7 @@ def test_helpful_only_for_own_session(env, base, kb):
 
             err, body = await call(other, "amemo_helpful", retrieval_id=rid, refs=[atom])
             assert err and body["code"] == "forbidden" and body["status"] == 403
-            assert "не из этой сессии" in body["detail"]
+            assert "not from this session" in body["detail"]
             err, body = await call(mine, "amemo_helpful", retrieval_id=rid, refs=[atom])
             assert not err and body == {"retrieval_id": rid, "marked": [atom]}
             err, body = await call(mine, "amemo_helpful", retrieval_id=rid, refs=["atm:019a0000-0000-7000-8000-0000"
@@ -498,7 +498,7 @@ def test_http_mcp_sessions_with_sdk_client(dsn, kb, store, docs, tmp_path):
                     _, found = await call(one, "amemo_search", query="кронштейн")
                     atom = found["items"][0]["ref"]
                     err, body = await call(two, "amemo_helpful", retrieval_id=found["retrieval_id"], refs=[atom])
-                    assert err and body["code"] == "forbidden" and "не из этой сессии" in body["detail"]
+                    assert err and body["code"] == "forbidden" and "not from this session" in body["detail"]
                     err, body = await call(one, "amemo_helpful", retrieval_id=found["retrieval_id"], refs=[atom])
                     assert not err, body
                 async with Client(streamable_http_client("http://127.0.0.1:8767/mcp", http_client=h1)) as modern, \

@@ -54,7 +54,7 @@ def _now(now: datetime | None) -> datetime:
     if now is None:
         return datetime.now(timezone.utc)
     if now.tzinfo is None or now.utcoffset() is None:
-        raise TaskError(f"now {now!r}: нужно время с часовым поясом", code="invalid")
+        raise TaskError(f"now {now!r}: a time with a time zone is required", code="invalid")
     return now
 
 
@@ -63,12 +63,12 @@ def _who(agent: str) -> str:
         return "person"
     if isinstance(agent, str) and agent.startswith("model:"):
         return "model"
-    raise TaskError(f"агент {agent!r}: нужен person:<имя> или model:<имя>", code="invalid")
+    raise TaskError(f"agent {agent!r}: person:<name> or model:<name> is required", code="invalid")
 
 
 def _model_only(agent: str, what: str) -> None:
     if _who(agent) != "model":
-        raise TaskError(f"{what} только модель (model:, через MCP), а не {agent}: человек ставит и отменяет задачи",
+        raise TaskError(f"only a model (model:, through MCP) {what}, not {agent}: a person creates and cancels tasks",
                         code="forbidden")
 
 
@@ -81,7 +81,7 @@ def _id(value) -> uuid.UUID:
 
 def _require_autocommit(conn: psycopg.Connection) -> None:
     if not conn.autocommit:
-        raise TaskError("задачи: нужно соединение с autocommit=True (db.connect)", code="invalid")
+        raise TaskError("tasks: a connection with autocommit=True is required (db.connect)", code="invalid")
 
 
 def _row(row, now: datetime) -> dict:
@@ -96,24 +96,24 @@ def _lock(conn, task_id: uuid.UUID, now: datetime) -> tuple[dict, tuple]:
     """Задача под блокировкой: (как её видит список, сырые state и claimed_by из базы)."""
     row = conn.execute(f"{_SELECT} WHERE id = %s FOR UPDATE", (task_id,)).fetchone()
     if row is None:
-        raise TaskError(f"задачи {task_id} нет", code="not_found")
+        raise TaskError(f"no task {task_id}", code="not_found")
     return _row(row, now), (row[5], row[8])
 
 
 def _closed(task: dict) -> TaskError:
-    return TaskError(f"задача {task['id']} уже закрыта ({task['state']}, {task['done_at'].isoformat()})",
+    return TaskError(f"the task {task['id']} is already closed ({task['state']}, {task['done_at'].isoformat()})",
                      code="closed")
 
 
 def _held(task: dict) -> TaskError:
-    return TaskError(f"задачу {task['id']} держит {task['claimed_by']} до {task['claimed_until'].isoformat()}",
+    return TaskError(f"the task {task['id']} is held by {task['claimed_by']} until {task['claimed_until'].isoformat()}",
                      code="claimed")
 
 
 def get(conn: psycopg.Connection, task_id, *, now: datetime | None = None) -> dict:
     row = conn.execute(f"{_SELECT} WHERE id = %s", (_id(task_id),)).fetchone()
     if row is None:
-        raise TaskError(f"задачи {task_id} нет", code="not_found")
+        raise TaskError(f"no task {task_id}", code="not_found")
     return _row(row, _now(now))
 
 
@@ -126,16 +126,16 @@ def create(conn: psycopg.Connection, kind: str, object_id: uuid.UUID, version: i
     _require_autocommit(conn)
     _who(agent)
     if kind not in KINDS:
-        raise TaskError(f"вид задачи {kind!r}: допустимы {', '.join(KINDS)}", code="invalid")
+        raise TaskError(f"task kind {kind!r}: allowed are {', '.join(KINDS)}", code="invalid")
     if isinstance(version, bool) or not isinstance(version, int) or version < 1:
-        raise TaskError(f"version {version!r}: нужен номер версии от 1", code="invalid")
+        raise TaskError(f"version {version!r}: a version number from 1 is required", code="invalid")
     now = _now(now)
     found = conn.execute("SELECT kind FROM object_version WHERE object_id = %s AND n = %s",
                          (object_id, version)).fetchone()
     if found is None:
-        raise TaskError(f"у объекта {object_id} нет версии {version}", code="not_found")
+        raise TaskError(f"the object {object_id} has no version {version}", code="not_found")
     if kind == "parse" and found[0] != "file":
-        raise TaskError(f"объект {object_id} — не файл ({found[0]}): разбирать нечего", code="invalid")
+        raise TaskError(f"the object {object_id} is not a file ({found[0]}): nothing to take apart", code="invalid")
     while True:
         with conn.transaction():
             records._ensure_agent(conn, agent)
@@ -158,9 +158,9 @@ def list_(conn: psycopg.Connection, *, state: str | None = None, object_id: uuid
     незакрытые (open и claimed): закрытые просят явно (state done или cancelled). agent — то, что нужно агенту:
     свободные задачи и взятые им самим (state тогда не задают)."""
     if state is not None and state not in STATES:
-        raise TaskError(f"state {state!r}: допустимы {', '.join(STATES)}", code="invalid")
+        raise TaskError(f"state {state!r}: allowed are {', '.join(STATES)}", code="invalid")
     if not 1 <= limit <= LIST_MAX:
-        raise TaskError(f"limit {limit}: нужно от 1 до {LIST_MAX}", code="invalid")
+        raise TaskError(f"limit {limit}: from 1 to {LIST_MAX} is required", code="invalid")
     now = _now(now)
     effective = "(CASE WHEN state = 'claimed' AND claimed_until < %(now)s THEN 'open' ELSE state END)"
     where, params = [], {"now": now, "limit": limit}
@@ -186,9 +186,9 @@ def claim(conn: psycopg.Connection, task_id=None, *, agent: str, kind: str | Non
     """Взять задачу (только модель): названную или, без task_id, самую старую свободную (kind — только такого
     вида); None — свободных нет. Своя — аренда продлевается. Чужая с живой арендой — claimed, закрытая — closed."""
     _require_autocommit(conn)
-    _model_only(agent, "берёт задачи")
+    _model_only(agent, "claims tasks")
     if kind is not None and kind not in KINDS:
-        raise TaskError(f"вид задачи {kind!r}: допустимы {', '.join(KINDS)}", code="invalid")
+        raise TaskError(f"task kind {kind!r}: allowed are {', '.join(KINDS)}", code="invalid")
     now = _now(now)
     until = now + lease
     with conn.transaction():
@@ -217,7 +217,7 @@ def release(conn: psycopg.Connection, task_id, *, agent: str, now: datetime | No
     живой арендой — claimed, чужую с истёкшей — forbidden (она и так свободна, а держатель ещё может её закрыть).
     Свободная, которую никто не держит, — без изменений."""
     _require_autocommit(conn)
-    _model_only(agent, "возвращает задачи")
+    _model_only(agent, "releases tasks")
     now = _now(now)
     with conn.transaction():
         task, (state, holder) = _lock(conn, _id(task_id), now)
@@ -226,8 +226,8 @@ def release(conn: psycopg.Connection, task_id, *, agent: str, now: datetime | No
         if task["state"] == "claimed" and task["claimed_by"] != agent:
             raise _held(task)
         if state == "claimed" and holder != agent:
-            raise TaskError(f"задачу {task['id']} брал {holder}, а не {agent}: вернуть её может только он "
-                            f"(аренда истекла — задача и так свободна)", code="forbidden")
+            raise TaskError(f"the task {task['id']} was claimed by {holder}, not {agent}: only they can release it "
+                            f"(the lease has expired — the task is free anyway)", code="forbidden")
         if state == "claimed":
             conn.execute("UPDATE task SET state = 'open', claimed_by = NULL, claimed_until = NULL WHERE id = %s",
                          (task["id"],))
@@ -239,9 +239,9 @@ def done(conn: psycopg.Connection, task_id, *, agent: str, result: dict | None =
     """Закрыть взятую задачу с итогом result (объект JSON: что сделано — ссылки записей). Закрывает тот, кто
     взял (и после истечения аренды, пока задачу не взял другой); повторно — closed."""
     _require_autocommit(conn)
-    _model_only(agent, "закрывает задачи")
+    _model_only(agent, "closes tasks")
     if result is not None and not isinstance(result, dict):
-        raise TaskError("result: нужен объект JSON", code="invalid")
+        raise TaskError("result: a JSON object is required", code="invalid")
     now = _now(now)
     with conn.transaction():
         task, (state, holder) = _lock(conn, _id(task_id), now)
@@ -250,7 +250,7 @@ def done(conn: psycopg.Connection, task_id, *, agent: str, result: dict | None =
         if state != "claimed" or holder != agent:
             if task["state"] == "claimed":
                 raise _held(task)
-            raise TaskError(f"задача {task['id']} не взята {agent}: сначала возьмите её (amemo_task_claim)",
+            raise TaskError(f"the task {task['id']} is not claimed by {agent}: claim it first (amemo_task_claim)",
                             code="invalid")
         conn.execute("UPDATE task SET state = 'done', claimed_until = NULL, done_at = %s, result = %s WHERE id = %s",
                      (now, Jsonb(result) if result is not None else None, task["id"]))
@@ -265,8 +265,9 @@ def cancel(conn: psycopg.Connection, task_id, *, agent: str, now: datetime | Non
     with conn.transaction():
         task, _ = _lock(conn, _id(task_id), now)
         if who != "person" and task["created_by"] != agent:
-            raise TaskError(f"задачу {task['id']} поставил {task['created_by']}: отменить её может он или человек, "
-                            f"а не {agent}", code="forbidden")
+            raise TaskError(f"the task {task['id']} was created by {task['created_by']}: they or a person can cancel "
+                            "it, "
+                            f"not {agent}", code="forbidden")
         if task["state"] in CLOSED:
             raise _closed(task)
         conn.execute("UPDATE task SET state = 'cancelled', claimed_until = NULL, done_at = %s WHERE id = %s",

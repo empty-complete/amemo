@@ -666,8 +666,8 @@ def test_copy_missing_from_the_store_is_404_and_logged(serve, world, caplog):
                                         ("content", world.note, None)):
             body = problem(client.get(url.format(oid(object_id), tail), params=params), 404, "not_found",
                            f"/objects/{{id}}/versions/{{n}}/{tail}")
-            assert "восстановите" in body["detail"] and str(world.store.root) not in body["detail"]
-    assert caplog.text.count("копии версии 1 нет в хранилище") == 5
+            assert "restore" in body["detail"] and str(world.store.root) not in body["detail"]
+    assert caplog.text.count("the store has no copy of version 1") == 5
     assert str(world.store.root) in caplog.text                          # где именно — в журнале службы
     assert contract.check(client.get(url.format(oid(world.note), "text")), "/objects/{id}/versions/{n}/text")["pages"]
 

@@ -61,23 +61,23 @@ def _now() -> datetime:
 def check(path) -> str:
     """Нормализованный путь папки (NFC, сегменты без пробелов по краям) или FolderError с кодом invalid."""
     if not isinstance(path, str):
-        raise FolderError(f"путь папки {path!r}: нужна строка", code="invalid")
+        raise FolderError(f"folder path {path!r}: a string is required", code="invalid")
     segments = [unicodedata.normalize("NFC", raw.strip()) for raw in path.split("/")]
     if len(segments) > MAX_DEPTH:
-        raise FolderError(f"папка {path!r}: {len(segments)} уровней, можно до {MAX_DEPTH}", code="invalid")
+        raise FolderError(f"folder {path!r}: {len(segments)} levels, up to {MAX_DEPTH} are allowed", code="invalid")
     for i, segment in enumerate(segments, 1):
-        where = f"папка {path!r}, сегмент {i}"
+        where = f"folder {path!r}, segment {i}"
         if not segment:
-            raise FolderError(f"{where}: пустой (лишний «/» или одни пробелы)", code="invalid")
+            raise FolderError(f"{where}: empty (an extra «/» or only spaces)", code="invalid")
         if segment in (".", ".."):
-            raise FolderError(f"{where}: «{segment}» — не имя папки", code="invalid")
+            raise FolderError(f"{where}: «{segment}» is not a folder name", code="invalid")
         if segment == NO_FOLDER:
-            raise FolderError(f"{where}: «-» означает «без папки» и именем папки быть не может", code="invalid")
+            raise FolderError(f"{where}: «-» means «no folder» and cannot be a folder name", code="invalid")
         bad = next((ch for ch in segment if ch not in _ALLOWED and unicodedata.category(ch) in _FORBIDDEN), None)
         if bad is not None:
-            raise FolderError(f"{where}: невидимый или управляющий знак U+{ord(bad):04X}", code="invalid")
+            raise FolderError(f"{where}: an invisible or control character U+{ord(bad):04X}", code="invalid")
         if len(segment) > MAX_SEGMENT:
-            raise FolderError(f"{where}: {len(segment)} знаков, можно до {MAX_SEGMENT}", code="invalid")
+            raise FolderError(f"{where}: {len(segment)} characters, up to {MAX_SEGMENT} are allowed", code="invalid")
     return "/".join(segments)
 
 
@@ -104,7 +104,7 @@ def _register(conn: psycopg.Connection, paths: Iterable[str], agent: str, at: da
     for path in paths:
         for p in _ancestors(path):
             if check(p) != p:
-                raise FolderError(f"папка {p!r}: путь не нормализован — сначала check", code="invalid")
+                raise FolderError(f"folder {p!r}: the path is not normalized — run check first", code="invalid")
             wanted.add(p)
     # от корня и в одном порядке для всех: два переноса с общим началом пути не встают в тупик
     ordered = sorted(wanted, key=lambda p: (p.count("/"), p))
@@ -214,7 +214,7 @@ def create(conn: psycopg.Connection, path: str, *, agent: str) -> dict:
         at = _now()
         # RETURNING ловит и папку, которую в этот миг создал соседний create
         if _known(conn, path) or path not in _register(conn, [path], agent, at):
-            raise FolderError(f"папка {path!r} уже есть", code="exists")
+            raise FolderError(f"the folder {path!r} already exists", code="exists")
     return {"path": path, "name": _name(path), "created_at": at.isoformat(), "created_by": agent}
 
 
@@ -225,9 +225,9 @@ def delete(conn: psycopg.Connection, path: str) -> dict:
     with conn.transaction():
         _lock_folders(conn, exclusive=True)
         if _has_content(conn, path):
-            raise FolderError(f"папка {path!r} не пуста: в ней есть записи или вложенные папки", code="not_empty")
+            raise FolderError(f"the folder {path!r} is not empty: it has records or nested folders", code="not_empty")
         if conn.execute("DELETE FROM folder WHERE path = %s RETURNING path", (path,)).fetchone() is None:
-            raise FolderError(f"папки {path!r} нет", code="not_found")
+            raise FolderError(f"no folder {path!r}", code="not_found")
     return {"path": path}
 
 
@@ -239,14 +239,14 @@ def rename(conn: psycopg.Connection, path: str, new_path: str, *, agent: str) ->
     records._require_autocommit(conn)
     old, new = check(path), check(new_path)
     if new.startswith(old + "/"):
-        raise FolderError(f"папку {old!r} нельзя перенести в её же вложенную {new!r}", code="invalid")
+        raise FolderError(f"the folder {old!r} cannot be moved into its own nested {new!r}", code="invalid")
     with conn.transaction():
         records._ensure_agent(conn, agent)
         _lock_folders(conn, exclusive=True)
         if not _known(conn, old):
-            raise FolderError(f"папки {old!r} нет", code="not_found")
+            raise FolderError(f"no folder {old!r}", code="not_found")
         if _known(conn, new):
-            raise FolderError(f"папка {new!r} уже есть", code="exists")
+            raise FolderError(f"the folder {new!r} already exists", code="exists")
         listed = [row[0] for row in conn.execute(
             "SELECT path FROM folder WHERE path = %(p)s OR starts_with(path, %(p)s || '/') ORDER BY path", {"p": old})]
         found = _records_in(conn, old)
@@ -256,7 +256,7 @@ def rename(conn: psycopg.Connection, path: str, new_path: str, *, agent: str) ->
             try:
                 renamed[before] = check(after)
             except FolderError as e:
-                raise FolderError(f"переименование {old!r} → {new!r}: папка {before!r} стала бы {after!r} — {e}",
+                raise FolderError(f"renaming {old!r} → {new!r}: the folder {before!r} would become {after!r} — {e}",
                                   code="invalid") from e
         # записи — по возрастанию id, как в records.commit: с пакетами по тем же записям тупика нет
         last = records._lock_many(conn, [(target, record_id) for target, record_id, _ in found])

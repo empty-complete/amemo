@@ -51,7 +51,7 @@ def test_interval_requires_aware_ordered_bounds_and_is_half_open(kb):
     naive = datetime.now()
     for since, until in ((naive, aware), (aware, naive), (aware, aware),
                          (aware, aware - timedelta(seconds=1))):
-        with pytest.raises(RecordError, match="часовым поясом|since.*until"):
+        with pytest.raises(RecordError, match="time zone|since.*until"):
             changed(kb, since=since, until=until)
 
     written = records.commit(kb, [atom("boundary")], agent=AGENT)
@@ -75,7 +75,7 @@ def test_ref_limits_history_and_missing_ref_is_an_error(kb):
     assert result["events"]
     assert {event["ref"] for event in result["events"]} == {f"atm:{first[0].record_id}"}
     assert [event["revision"] for event in events_of(result, "revision")] == [1]
-    with pytest.raises(RecordError, match="такой записи нет"):
+    with pytest.raises(RecordError, match="no such record"):
         changed(kb, ref=f"atm:{ids.uuid7()}")
 
 

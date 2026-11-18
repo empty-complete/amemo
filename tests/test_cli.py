@@ -204,7 +204,7 @@ def test_base_summary_and_name(run, base, start):
     assert code == 0 and "Рабочая база" in out
     assert js(run("base", "name", "--json")[1]) == {"name": "Рабочая база"}
     code, _, err = run("base", "name", "Чужое", extra={"CLAUDECODE": "1"})
-    assert code == 2 and "только человек" in err
+    assert code == 2 and "only a person" in err
     assert run("base", "name", " ")[0] == 2                     # пустое имя — BaseNameError
 
 
@@ -390,7 +390,7 @@ def test_get_timeline_card(run, base, start):
 
 def test_ambiguous_text_exits_3_with_candidates(run, base):
     code, out, err = run("get", "кронштейн")
-    assert code == 3 and "явного лидера нет" in err
+    assert code == 3 and "no clear leader" in err
     assert base["@bracket"] in err and base["@anchor"] in err and out == ""     # всё об ошибке — в stderr
     code, out, _ = run("timeline", "кронштейн", "--json")
     body = js(out)
@@ -529,11 +529,11 @@ def test_tasks_list_and_cancel(run, kb, store, docs, start):
     assert "Задач нет." in run("tasks", "list", "--object", str(objects.ingest(
         kb, store, docs, "заметка.md", agent=PERSON).object_id))[1]
     code, _, err = run("tasks", "cancel", task_id, extra={"AMEMO_AS_MODEL": "other"})
-    assert code == 2 and "отменить" in err                        # чужая модель — forbidden (403)
+    assert code == 2 and "cancel" in err                        # чужая модель — forbidden (403)
     code, out, _ = run("tasks", "cancel", task_id, "--json")       # человек — любую
     assert code == 0 and js(out)["state"] == "cancelled"
     code, _, err = run("tasks", "cancel", task_id)
-    assert code == 6 and "закрыта" in err                          # уже закрыта — task_closed (409)
+    assert code == 6 and "closed" in err                          # уже закрыта — task_closed (409)
     assert run("tasks", "cancel", "019a0000-0000-7000-8000-000000000000")[0] == 4
     assert run("tasks", "cancel", "не-uuid")[0] == 2
 
@@ -546,9 +546,9 @@ def test_folders(run, base, start):
     assert "Проекты  (0)" in run("folders", "tree")[1]
     assert run("folders", "create", "Проекты/Узлы")[0] == 0
     code, _, err = run("folders", "create", "Проекты/Узлы")
-    assert code == 6 and "уже есть" in err
+    assert code == 6 and "already exists" in err
     code, _, err = run("folders", "create", "Проекты/Модель", extra={"CLAUDECODE": "1"})
-    assert code == 2 and "только человек" in err
+    assert code == 2 and "only a person" in err
     code, out, _ = run("folders", "move", base["@bracket"], "Проекты/Узлы", "--json", extra={"CLAUDECODE": "1"})
     assert code == 0 and js(out)["folder"] == "Проекты/Узлы"      # переносить в существующую вправе и модель
     assert run("folders", "move", base["@anchor"], "Новая", extra={"CLAUDECODE": "1"})[0] == 4
@@ -584,7 +584,7 @@ def test_export_inspect_import(run, base, pg2, tmp_path):
     assert code == 0 and plan["changeset_id"] is None
     assert pg2.execute("SELECT count(*) FROM atom").fetchone()[0] == 0
     code, _, err = run("import", str(out_zip), "--apply", extra={**other, "CLAUDECODE": "1"})
-    assert code == 2 and "только человек" in err
+    assert code == 2 and "only a person" in err
     code, out, _ = run("import", str(out_zip), "--apply", extra=other)
     assert code == 0 and "Влито пакетом" in out
     assert pg2.execute("SELECT count(*) FROM atom").fetchone()[0] == 2
@@ -761,12 +761,12 @@ def test_amemo_debug_prints_traceback_of_internal_error():
 def test_ambiguous_at_channel_limit_says_at_least(run, kb, store, docs):
     written(kb, store, docs, *[fact(ref=f"@a{i}", label=f"Кронштейн номер {i}") for i in range(55)])
     code, out, err = run("get", "кронштейн")
-    assert code == 3 and "не меньше" in err
+    assert code == 3 and "at least" in err
 
 
 def test_base_rename_refusal_has_its_own_message(run, kb):
     code, _, err = run("base", "name", "Чужое", extra={"CLAUDECODE": "1"})
-    assert code == 2 and "имя базы меняет только человек" in err and "папк" not in err
+    assert code == 2 and "changes the name of the base" in err and "folder" not in err
 
 
 def test_anthology_report_does_not_overwrite_html_zip(run, base, tmp_path):

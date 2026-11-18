@@ -217,13 +217,13 @@ def test_similar_ref_uses_current_stored_vector_and_excludes_source(kb, provider
 
 def test_similar_ref_rejects_missing_record_and_record_without_current_revision(kb):
     missing = ids.uuid7()
-    with pytest.raises(RecordError, match="такой записи нет"):
+    with pytest.raises(RecordError, match="no such record"):
         search_recipe(kb, "similar", f"atm:{missing}")
 
     record_id = ids.uuid7()
     kb.execute("INSERT INTO atom (id, key, kind, status, created_at, status_changed_at) "
                "VALUES (%s, 'empty', 'fact', 'draft', now(), now())", (record_id,))
-    with pytest.raises(RecordError, match="текущей ревизии"):
+    with pytest.raises(RecordError, match="current revision"):
         search_recipe(kb, "similar", f"atm:{record_id}")
     with pytest.raises(RecordError, match="UUID"):
         search_recipe(kb, "similar", "atm:not-a-uuid")
@@ -311,7 +311,7 @@ def test_query_provider_must_match_active_model(kb, provider):
     wrong.version = "2"
     wrong.vector = semantic_vector
 
-    with pytest.raises(embed.EmbeddingError, match="активной модели"):
+    with pytest.raises(embed.EmbeddingError, match="active model"):
         search_recipe(kb, "exact_fact", "alpha", provider=wrong)
 
 

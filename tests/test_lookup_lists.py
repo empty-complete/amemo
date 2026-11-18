@@ -79,7 +79,7 @@ def test_resolve_unknown_record_is_not_found(kb):
     a = commit(kb, atom("Ветровая нагрузка", key="wind_load")).revisions[0]
     assert issubclass(RecordNotFound, RecordError)
     for ref in (f"atm:{ids.uuid7()}", "atm:no_such_key", "ent:wind_load", f"ent:{a.record_id}"):
-        with pytest.raises(RecordNotFound, match="такой записи нет|нет записи с ключом"):
+        with pytest.raises(RecordNotFound, match="no such record|no record with the key"):
             records.resolve(kb, ref)
 
 
@@ -88,7 +88,7 @@ def test_resolve_finds_current_key_not_old_one(kb):
     a = commit(kb, atom("Ветровая нагрузка", key="wind_old")).revisions[0]
     commit(kb, atom("Ветровая нагрузка", key="wind_new", record_id=a.record_id))
     assert records.resolve(kb, "atm:wind_new") == ("atom", a.record_id)
-    with pytest.raises(RecordNotFound, match="нет записи с ключом wind_old"):
+    with pytest.raises(RecordNotFound, match="no record with the key wind_old"):
         records.resolve(kb, "atm:wind_old")
     assert lookup.get(kb, "atom", "atm:wind_old") is None
 

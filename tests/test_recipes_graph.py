@@ -115,7 +115,7 @@ def test_depth_rel_status_and_missing_start(kb):
     for depth in (0, 4, -1, True, "2"):
         with pytest.raises(RecordError, match="depth"):
             around(kb, refs["@root"], depth=depth)
-    with pytest.raises(RecordError, match="такой записи нет"):
+    with pytest.raises(RecordError, match="no such record"):
         around(kb, f"ent:{ids.uuid7()}")
     with pytest.raises(RecordError, match="ref|UUID"):
         around(kb, "ent:not-a-uuid")
@@ -260,11 +260,11 @@ def test_rels_filter_links_and_fields(kb):
     assert neighbours(around(kb, root, rels=("depends_on", "used_in"))) == {refs["@b"], refs["@c"]}
     assert neighbours(around(kb, root, rels=frozenset({"about", "used_in"}))) == {refs["@a"], refs["@c"]}
     assert neighbours(around(kb, root, rels=["derived_from"])) == set()
-    for bad, message in [("depends_on", "не строкой"), (5, "не строкой"), ([], "пустой"),
-                         (["bogus"], "неизвестные виды связей bogus"), ([1], "строки"), ([["about"]], "строки")]:
+    for bad, message in [("depends_on", "not a string"), (5, "not a string"), ([], "empty"),
+                         (["bogus"], "unknown link types bogus"), ([1], "code strings"), ([["about"]], "code strings")]:
         with pytest.raises(RecordError, match=message):
             around(kb, root, rels=bad)
-    with pytest.raises(ValueError, match="не строкой"):                 # statuses — набор, как у других рецептов
+    with pytest.raises(ValueError, match="not a string"):                 # statuses — набор, как у других рецептов
         around(kb, root, statuses="deprecated")
 
 
@@ -539,7 +539,7 @@ def test_overview_of_a_project(kb):
         {refs["@p3"]}
     assert {n["ref"] for n in recipes.overview(kb, project="ent:else")["nodes"]} == \
         {refs["@other"], refs["@moved"], refs["@e4"], refs["@e3"]}
-    with pytest.raises(RecordError, match="сущность"):
+    with pytest.raises(RecordError, match="an entity"):
         recipes.overview(kb, project=refs["@p1"])
     with pytest.raises(RecordNotFound):
         recipes.overview(kb, project="ent:no_such")

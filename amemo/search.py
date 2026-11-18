@@ -39,7 +39,7 @@ class SearchText:
 def normalize_code(value: str) -> str:
     """Марка для точного и префиксного поиска; дефис между буквами, в отличие от цитат, сохраняется."""
     if not isinstance(value, str) or not value.strip():
-        raise ValueError("марка должна быть непустой строкой")
+        raise ValueError("a code must be a non-empty string")
     # sources.normalize склеивает переносы слов. Сначала ставим вокруг тире пробелы:
     # для normalize это уже не перенос, а после нормализации пробелы вокруг марочных знаков убираем.
     protected = "".join(" - " if unicodedata.category(ch) == "Pd" or ch == "−" else ch
@@ -49,7 +49,7 @@ def normalize_code(value: str) -> str:
     normalized = re.sub(r"\s*\.\s*", ".", normalized)
     normalized = re.sub(r"\s+", " ", normalized).strip()
     if not normalized:
-        raise ValueError("марка должна быть непустой строкой")
+        raise ValueError("a code must be a non-empty string")
     return normalized
 
 
@@ -104,7 +104,7 @@ def _fragments(values) -> tuple[str, ...]:
 def search_text(payload: dict, target: Target) -> SearchText:
     """Тело ревизии → взвешенные части, плоский документ для эмбеддинга и нормализованные марки."""
     if target not in ("atom", "entity"):
-        raise ValueError(f"неизвестный вид записи {target!r}")
+        raise ValueError(f"unknown record target {target!r}")
     a, b, c, d = _parts(payload, target, lambda value: _slot(value, "ru"))
     if target == "atom":
         c = _content_strings(payload.get("content", {}))
@@ -123,7 +123,7 @@ def shown_text(payload: dict, target: Target, lang: str | None = None) -> str:
     """Текст записи на одном языке — каждое LangString-поле одним слотом по lang.pick(…, lang); порядок и состав —
     как у документа search_text. Из него строится фрагмент находки."""
     if target not in ("atom", "entity"):
-        raise ValueError(f"неизвестный вид записи {target!r}")
+        raise ValueError(f"unknown record target {target!r}")
 
     def text(value) -> list[str]:
         picked = lang_.pick(value, lang) if isinstance(value, dict) else None
@@ -139,7 +139,7 @@ def shown_text(payload: dict, target: Target, lang: str | None = None) -> str:
 def refresh_record(conn: psycopg.Connection, target: Target, record_id) -> None:
     """Проекция одной записи из её текущей ревизии; вызывается в транзакции записи и при перестройке."""
     if target not in ("atom", "entity"):
-        raise ValueError(f"неизвестный вид записи {target!r}")
+        raise ValueError(f"unknown record target {target!r}")
     with conn.transaction():
         row = conn.execute(
             f"SELECT id, payload, content_hash, recorded_at FROM {target}_current WHERE {target}_id = %s",
@@ -217,10 +217,10 @@ def _codes(value, name: str) -> tuple[str, ...] | None:
         try:
             values = tuple(value)
         except TypeError:
-            raise ValueError(f"{name} {value!r}: нужен код или последовательность кодов") from None
+            raise ValueError(f"{name} {value!r}: a code or a sequence of codes is required") from None
     for v in values:
         if not isinstance(v, str) or not v:
-            raise ValueError(f"{name}: код {v!r} — нужна непустая строка")
+            raise ValueError(f"{name}: the code {v!r} — a non-empty string is required")
     return tuple(dict.fromkeys(values)) or None
 
 
@@ -228,7 +228,7 @@ def _channel_targets(target, kinds, classes) -> tuple[Target, ...]:
     """Виды записей канала. kinds отбирает атомы, classes — сущности: заданный фильтр одного вида записей
     исключает другой вид, если для него фильтра нет; заданы оба — атомы этих видов и сущности этих классов."""
     if target is not None and target not in _REF_PREFIX:
-        raise ValueError(f"неизвестный вид записи {target!r}")
+        raise ValueError(f"unknown record target {target!r}")
     targets = (target,) if target is not None else ("atom", "entity")
     if kinds is None and classes is None:
         return targets
@@ -250,11 +250,11 @@ def _channel_statuses(statuses) -> tuple[str, ...]:
     if statuses is None:
         return _DEFAULT_STATUSES
     if isinstance(statuses, str):
-        raise ValueError("statuses должен быть последовательностью статусов, не строкой")
+        raise ValueError("statuses must be a sequence of statuses, not a string")
     values = tuple(dict.fromkeys(statuses))
     unknown = set(values) - set(_STATUSES)
     if unknown:
-        raise ValueError(f"неизвестные статусы: {', '.join(sorted(unknown))}")
+        raise ValueError(f"unknown statuses: {', '.join(sorted(unknown))}")
     return values
 
 
@@ -266,7 +266,7 @@ def _like_prefix(value: str) -> str:
 def _lexical_channel(conn: psycopg.Connection, query: str, channel: str, *, target=None,
                      kind=None, entity_class=None, statuses=None, exclude=None) -> list[dict]:
     if not isinstance(query, str):
-        raise ValueError("запрос должен быть строкой")
+        raise ValueError("the query must be a string")
     kinds, classes = _codes(kind, "kind"), _codes(entity_class, "entity_class")
     if not query.strip():
         return []
@@ -280,7 +280,7 @@ def _lexical_channel(conn: psycopg.Connection, query: str, channel: str, *, targ
         params["prefix"] = _like_prefix(params["query"])
     if exclude is not None:
         if exclude[0] not in _REF_PREFIX:
-            raise ValueError(f"неизвестный вид записи {exclude[0]!r}")
+            raise ValueError(f"unknown record target {exclude[0]!r}")
         params["exclude_target"], params["exclude_record_id"] = exclude
 
     selects = []
@@ -306,7 +306,7 @@ def _lexical_channel(conn: psycopg.Connection, query: str, channel: str, *, targ
             source_rank = f"ts_rank_cd(d.search_vector, {lang_.tsquery('%(query)s')})"
             conditions.append(f"d.search_vector @@ {lang_.tsquery('%(query)s')}")
         else:
-            raise ValueError(f"неизвестный лексический канал {channel!r}")
+            raise ValueError(f"unknown lexical channel {channel!r}")
         selects.append(f"SELECT d.target, d.record_id, d.revision_id, {source_rank} AS source_rank "
                        f"FROM search_document d JOIN {table} rec ON rec.id = d.record_id "
                        f"WHERE {' AND '.join(conditions)}")
@@ -373,7 +373,7 @@ def _hash_params() -> dict:
 def _current_embedding(conn: psycopg.Connection, target: Target, record_id, model_id):
     """Свежий вектор именно текущей ревизии и активной модели; старую ревизию не подставлять."""
     if target not in _REF_PREFIX:
-        raise ValueError(f"неизвестный вид записи {target!r}")
+        raise ValueError(f"unknown record target {target!r}")
     from pgvector.psycopg import register_vector
     register_vector(conn)
     table = target
@@ -401,7 +401,7 @@ def _vector(conn: psycopg.Connection, vector, model_id, *, target=None, kind=Non
               "model_id": model_id, "statuses": list(allowed_statuses), **_hash_params()}
     if exclude is not None:
         if exclude[0] not in _REF_PREFIX:
-            raise ValueError(f"неизвестный вид записи {exclude[0]!r}")
+            raise ValueError(f"unknown record target {exclude[0]!r}")
         params["exclude_target"], params["exclude_record_id"] = exclude
 
     selects = []
@@ -451,7 +451,7 @@ def _rrf(channels: dict[str, list[dict] | None], weights: dict[str, float], *, l
          usefulness: dict[str, float] | None = None) -> dict:
     """Слить каналы по RRF, затем применить полезность и только после этого отсортировать."""
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
-        raise ValueError("limit должен быть целым числом от 1 до 100")
+        raise ValueError("limit must be an integer from 1 to 100")
 
     used_channels = [channel for channel in weights if channels.get(channel) is not None]
     skipped_channels = [channel for channel in weights if channels.get(channel) is None]
@@ -506,7 +506,7 @@ def _enrich(conn: psycopg.Connection, candidates: list[dict], *, include_record=
     for candidate in candidates:
         target = candidate["target"]
         if target not in _REF_PREFIX:
-            raise ValueError(f"неизвестный вид записи {target!r}")
+            raise ValueError(f"unknown record target {target!r}")
         grouped.setdefault(target, []).append(candidate["record_id"])
     rows = {}
     for target, record_ids in grouped.items():
@@ -525,7 +525,7 @@ def _enrich(conn: psycopg.Connection, candidates: list[dict], *, include_record=
         target, record_id = candidate["target"], candidate["record_id"]
         row = rows.get((target, record_id))
         if row is None:
-            raise ValueError(f"поисковая проекция {candidate['ref']} не найдена")
+            raise ValueError(f"the search projection of {candidate['ref']} is not found")
         card = {"ref": candidate["ref"], "revision": row[3], "label": row[6].get("label"),
                 "snippet": _snippet(shown_text(row[6], target, lang)), "status": row[5], "review_state": row[4]}
         if include_record:
