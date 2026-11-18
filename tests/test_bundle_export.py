@@ -145,7 +145,7 @@ def test_selection_refs_by_key_and_unknown(world, tmp_path):
     bundle.export(pg, store=None, folder=out, selection=bundle.Selection(refs=("atm:note.k", refs["@s"])), agent=PERSON)
     assert _ids(out / "atoms.jsonl") == {str(done.revisions[0].record_id)}
     assert _ids(out / "entities.jsonl") == {_id(refs["@s"])}
-    with pytest.raises(bundle.BundleError, match="atm:nope: записи нет"):
+    with pytest.raises(bundle.BundleError, match="atm:nope: no such record"):
         bundle.export(pg, store=None, folder=tmp_path / "c", selection=bundle.Selection(refs=("atm:nope",)),
                       agent=PERSON)
     assert not (tmp_path / "c").exists()
@@ -196,7 +196,7 @@ def test_export_with_files_and_inspect(world, tmp_path, store):
 
 def test_with_files_needs_store(world, tmp_path):
     pg, refs = world
-    with pytest.raises(bundle.BundleError, match="хранилище"):
+    with pytest.raises(bundle.BundleError, match="object store"):
         bundle.export(pg, store=None, folder=tmp_path / "b", selection=bundle.Selection(refs=(refs["@m"],)),
                       agent=PERSON, with_files=True)
     assert not (tmp_path / "b").exists()
@@ -205,7 +205,7 @@ def test_with_files_needs_store(world, tmp_path):
 def test_export_refuses_existing_folder(world, tmp_path):
     pg, _ = world
     (tmp_path / "b").mkdir()
-    with pytest.raises(bundle.BundleError, match="уже есть"):
+    with pytest.raises(bundle.BundleError, match="already exists"):
         bundle.export(pg, store=None, folder=tmp_path / "b", selection=bundle.Selection(), agent=PERSON)
 
 
@@ -217,7 +217,7 @@ def test_export_with_packs_checks_digest(world, tmp_path):
     assert (out / "packs" / "ontology" / "pack.yaml").exists() and (out / "packs" / "core" / "vocab").is_dir()
     assert "packs/ontology/pack.yaml" in m["parts"] and bundle.inspect(out)["ok"] is True
     pg.execute("UPDATE pack SET digest = 'deadbeef' WHERE name = 'ontology'")
-    with pytest.raises(bundle.BundleError, match="digest пакета ontology"):
+    with pytest.raises(bundle.BundleError, match="the digest of the pack ontology"):
         bundle.export(pg, store=None, folder=tmp_path / "c", selection=bundle.Selection(tags=("shared",)),
                       agent=PERSON, with_packs=True)
     assert not (tmp_path / "c").exists()
@@ -324,7 +324,7 @@ def test_export_changes_nothing_and_is_repeatable(world, tmp_path, store):
 def test_with_files_store_error_is_bundle_error(world, tmp_path):
     from amemo.ocfl_store import ObjectStore
     pg, refs = world
-    with pytest.raises(bundle.BundleError, match="не скопирован из хранилища"):
+    with pytest.raises(bundle.BundleError, match="is not copied from the store"):
         bundle.export(pg, store=ObjectStore(tmp_path / "empty"), folder=tmp_path / "b",
                       selection=bundle.Selection(refs=(refs["@m"],)), agent=PERSON, with_files=True)
     assert not (tmp_path / "b").exists()
@@ -355,27 +355,27 @@ def _zip(path: Path, members: dict[str, bytes], symlink: str | None = None) -> P
 
 @pytest.mark.parametrize("name", ["../evil.txt", "/abs.txt", "a\\..\\b.txt", "C:/win.txt"])
 def test_zip_with_bad_names_is_refused_before_unpacking(tmp_path, name):
-    with pytest.raises(bundle.BundleError, match="недопустимое имя"):
+    with pytest.raises(bundle.BundleError, match="not allowed in the archive"):
         bundle.inspect(_zip(tmp_path / "b.zip", {name: b"x"}))
     assert not (tmp_path / "evil.txt").exists()
 
 
 def test_zip_with_symlink_is_refused(tmp_path):
-    with pytest.raises(bundle.BundleError, match="символическая ссылка"):
+    with pytest.raises(bundle.BundleError, match="symbolic link"):
         bundle.inspect(_zip(tmp_path / "b.zip", {}, symlink="atoms.jsonl"))
 
 
 def test_zip_bomb_limits(tmp_path, monkeypatch):
     path = _zip(tmp_path / "b.zip", {"atoms.jsonl": b"\0" * (2 << 20)})          # 2 МиБ нулей: сжатие ~1000:1
-    with pytest.raises(bundle.BundleError, match="zip-бомбу"):
+    with pytest.raises(bundle.BundleError, match="zip bomb"):
         bundle.inspect(path)
     monkeypatch.setattr(bundle, "MAX_RATIO", 10 ** 6)
     monkeypatch.setattr(bundle, "MAX_UNPACKED", 1 << 20)
-    with pytest.raises(bundle.BundleError, match="больше предела"):
+    with pytest.raises(bundle.BundleError, match="over the limit"):
         bundle.inspect(path)
     monkeypatch.setattr(bundle, "MAX_UNPACKED", 1 << 30)
     monkeypatch.setattr(bundle, "MAX_MEMBERS", 1)
-    with pytest.raises(bundle.BundleError, match="записей в архиве"):
+    with pytest.raises(bundle.BundleError, match="entries in the archive"):
         bundle.inspect(path)
 
 
