@@ -123,9 +123,9 @@ def _str(value, name: str) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str):
-        raise BadRequest(f"{name} {value!r}: нужна строка")
+        raise BadRequest(f"{name} {value!r}: a string is required")
     if "\x00" in value:
-        raise BadRequest(f"{name}: знак NUL (\\x00) в строке не допускается")
+        raise BadRequest(f"{name}: a NUL character (\\x00) is not allowed in a string")
     return value
 
 
@@ -136,10 +136,10 @@ def _int(value, name: str, *, low: int, high: int | None = None, default: int | 
     if isinstance(value, str) and _INT.fullmatch(_str(value, name).strip()):
         value = int(value)
     if isinstance(value, bool) or not isinstance(value, int):
-        raise BadRequest(f"{name} {value!r}: нужно целое число")
+        raise BadRequest(f"{name} {value!r}: an integer is required")
     if value < low or (high is not None and value > high):
-        bounds = f"от {low} до {high}" if high is not None else f"от {low}"
-        raise BadRequest(f"{name} {value}: нужно целое число {bounds}")
+        bounds = f"from {low} to {high}" if high is not None else f"from {low}"
+        raise BadRequest(f"{name} {value}: an integer {bounds} is required")
     return value
 
 
@@ -150,14 +150,14 @@ def _bool(value, name: str, *, default: bool) -> bool:
         return value
     if isinstance(value, str) and _str(value, name).strip().lower() in ("true", "false", "1", "0"):
         return value.strip().lower() in ("true", "1")
-    raise BadRequest(f"{name} {value!r}: нужно true или false")
+    raise BadRequest(f"{name} {value!r}: true or false is required")
 
 
 def _enum(value, name: str, allowed, *, default: str | None = None) -> str | None:
     if value is None or value == "":
         return default
     if _str(value, name) not in allowed:
-        raise BadRequest(f"{name} {value!r}: допустимы {', '.join(allowed)}")
+        raise BadRequest(f"{name} {value!r}: allowed are {', '.join(allowed)}")
     return value
 
 
@@ -170,10 +170,10 @@ def _codes(values, name: str) -> list[str] | None:
     try:
         items = list(values)
     except TypeError:
-        raise BadRequest(f"{name}: нужен список кодов") from None
+        raise BadRequest(f"{name}: a list of codes is required") from None
     for item in items:
         if not isinstance(item, str) or not item.strip():
-            raise BadRequest(f"{name}: код {item!r} — нужна непустая строка")
+            raise BadRequest(f"{name}: the code {item!r} — a non-empty string is required")
         _str(item, name)
     return list(dict.fromkeys(items)) or None
 
@@ -182,13 +182,13 @@ def _statuses(values) -> list[str] | None:
     statuses = _codes(values, "status")
     unknown = sorted(set(statuses or ()) - set(STATUSES))
     if unknown:
-        raise BadRequest(f"status: неизвестные статусы {', '.join(unknown)}; допустимы {', '.join(STATUSES)}")
+        raise BadRequest(f"status: unknown statuses {', '.join(unknown)}; allowed are {', '.join(STATUSES)}")
     return statuses
 
 
 def _ref(value, name: str = "ref") -> str:
     if not isinstance(value, str) or not _REF.fullmatch(_str(value, name)):
-        raise BadRequest(f"{name} {value!r}: нужна ссылка atm:<UUID или ключ> или ent:<UUID или ключ>")
+        raise BadRequest(f"{name} {value!r}: a reference atm:<UUID or key> or ent:<UUID or key> is required")
     return value
 
 
@@ -204,9 +204,10 @@ def _moment(value, name: str) -> datetime | None:
         try:
             moment = datetime.fromisoformat(text)
         except ValueError:
-            raise BadRequest(f"{name} {value!r}: нужно время ISO 8601, например 2026-11-07T09:00:00Z") from None
+            raise BadRequest(f"{name} {value!r}: an ISO 8601 time is required, for example "
+                             "2026-11-07T09:00:00Z") from None
     if not isinstance(moment, datetime) or moment.tzinfo is None or moment.utcoffset() is None:
-        raise BadRequest(f"{name} {value!r}: нужно время с часовым поясом (…Z или …+03:00)")
+        raise BadRequest(f"{name} {value!r}: a time with a time zone is required (…Z or …+03:00)")
     return moment
 
 
@@ -224,11 +225,11 @@ def _object_id(value) -> uuid.UUID:
     if isinstance(value, uuid.UUID):
         return value
     if not isinstance(value, str) or "\x00" in value:
-        raise BadRequest(f"id {value!r}: нужен UUID объекта")
+        raise BadRequest(f"id {value!r}: the UUID of an object is required")
     try:
         return uuid.UUID(value[4:] if value.startswith("obj:") else value)
     except ValueError:
-        raise BadRequest(f"id {value!r}: нужен UUID объекта (или obj:<UUID>)") from None
+        raise BadRequest(f"id {value!r}: the UUID of an object is required (or obj:<UUID>)") from None
 
 
 # --- подписи ---
@@ -271,7 +272,7 @@ def search(conn: psycopg.Connection, q, *, agent: str, kind=None, status=None, e
     канал пропускается (semantic: unavailable, причина в channels.reasons.vector), а не валит поиск: марки
     и полнотекстовый канал отвечают и так."""
     if _str(q, "q") is None:
-        raise BadRequest("q: нужен текст запроса")
+        raise BadRequest("q: the text of the query is required")
     result = recipes.exact_fact(
         conn, private.strip(q), agent=agent, activity=activity,
         limit=_int(limit, "limit", low=1, high=100, default=10),
@@ -286,13 +287,13 @@ def similar(conn: psycopg.Connection, *, agent: str, ref=None, q=None, limit=Non
     """SearchResult рецепта similar — по ссылке на запись (ref) или по тексту (q), ровно одно из двух. Без вектора
     запроса похожие по тексту ищет полнотекстовый канал (semantic: unavailable), как у search."""
     if (ref in (None, "")) == (q in (None, "")):
-        raise BadRequest("similar: нужен ровно один из параметров ref (atm:/ent:) или q (текст)")
+        raise BadRequest("similar: exactly one of ref (atm:/ent:) or q (text) is required")
     if ref not in (None, ""):
         query = _ref(ref)
     else:
         query = private.strip(_str(q, "q"))
         if query.startswith(("atm:", "ent:")):
-            raise BadRequest("q: похожие на запись ищутся по параметру ref, а не по тексту atm:/ent:")
+            raise BadRequest("q: records similar to a record are searched by ref, not by the text atm:/ent:")
     result = recipes.similar(conn, query, agent=agent, activity=activity,
                              limit=_int(limit, "limit", low=1, high=100, default=10), provider=provider,
                              on_semantic_error="skip", lang=lang.current())
@@ -352,28 +353,29 @@ def helpful(conn: psycopg.Connection, retrieval_id, refs, *, agent: str, activit
     try:
         rid = uuid.UUID(_str(retrieval_id, "retrieval_id") or "")
     except ValueError:
-        raise BadRequest(f"retrieval_id {retrieval_id!r}: нужен UUID выдачи из ответа поиска") from None
+        raise BadRequest(f"retrieval_id {retrieval_id!r}: the UUID of a result from a search answer is "
+                         "required") from None
     if isinstance(refs, str) or not isinstance(refs, list) or not refs:
-        raise BadRequest("refs: нужен непустой список ссылок atm: из этой выдачи")
+        raise BadRequest("refs: a non-empty list of atm: references from this result is required")
     if len(refs) > HELPFUL_MAX:
-        raise BadRequest(f"refs: не больше {HELPFUL_MAX} ссылок за раз")
+        raise BadRequest(f"refs: at most {HELPFUL_MAX} references at once")
     for ref in refs:
         if not isinstance(ref, str) or not ref.startswith("atm:"):
-            raise BadRequest(f"refs: {ref!r} — полезность отмечается только у атомов (atm:<UUID>) выдачи")
+            raise BadRequest(f"refs: {ref!r} — only atoms (atm:<UUID>) of the result can be marked helpful")
         _ref(ref, "refs")
     row = conn.execute("SELECT r.activity, r.agent, a.label FROM retrieval r LEFT JOIN activity a ON a.id = r.activity "
                        "WHERE r.id = %s", (rid,)).fetchone()
     if row is None:
-        raise BadRequest(f"retrieval_id {rid}: такой выдачи нет — возьмите retrieval_id из ответа поиска")
+        raise BadRequest(f"retrieval_id {rid}: no such result — take retrieval_id from a search answer")
     found, found_agent, label = row
     if issued_to is not None:
         if found is None or found_agent != agent or not (label or "").startswith(issued_to):
-            raise Forbidden(f"retrieval_id {rid}: выдача не из этой сессии — отмечать можно только находки своего "
-                            f"поиска (тот же вход и агент)")
+            raise Forbidden(f"retrieval_id {rid}: the result is not from this session — only hits of your own "
+                            f"search can be marked (the same login and agent)")
         activity = found
     elif activity is None or found != activity:
-        raise Forbidden(f"retrieval_id {rid}: выдача не из этой сессии — отмечать можно только находки поиска "
-                        f"своей сессии")
+        raise Forbidden(f"retrieval_id {rid}: the result is not from this session — only hits of a search "
+                        f"of your own session can be marked")
     try:
         usefulness.mark_helpful(conn, rid, refs, agent=agent, activity=activity)
     except ValueError as e:                  # атом не из этой выдачи, ссылка не UUID
@@ -425,7 +427,7 @@ def record(conn: psycopg.Connection, ref, *, revision=None) -> dict:
         if n is not None:
             found = [r for r in lookup.history(conn, target, record_id) if r["n"] == n]
             if not found:
-                raise records.RecordNotFound(f"{ref}: ревизии {n} нет")
+                raise records.RecordNotFound(f"{ref}: no revision {n}")
             shown = found[0] | cur.execute(f"SELECT status, folder FROM {t} WHERE id = %s", (record_id,)).fetchone()
             shown["recorded_at"] = shown["recorded_at"].isoformat()
         elif current is not None:
@@ -567,7 +569,7 @@ def changes(conn: psycopg.Connection, *, since=None, until=None, who=None, limit
     """ChangesResult по базе за [since, until): самые новые limit событий, по времени."""
     since, until = _moment(since, "since"), _moment(until, "until")
     if since is not None and until is not None and since >= until:
-        raise BadRequest("since должен быть строго раньше until")
+        raise BadRequest("since must be strictly earlier than until")
     return _changes(conn, recipes.what_changed(conn, since=since, until=until,
                                                who=_enum(who, "who", WHO, default="all"),
                                                limit=_int(limit, "limit", low=1, high=500, default=100)))
@@ -633,7 +635,7 @@ def pick(conn: psycopg.Connection, text, *, target=None) -> str:
 
     text = _str(text, "ref")
     if not text or not text.strip():
-        raise BadRequest("ref: нужна ссылка atm:/ent: или текст для поиска записи")
+        raise BadRequest("ref: a reference atm:/ent: or a text to find the record is required")
     if _REF.fullmatch(text):
         found_target, record_id = records.resolve(conn, text)
         return f"{records.PREFIX[found_target]}:{record_id}"
@@ -651,8 +653,8 @@ def pick(conn: psycopg.Connection, text, *, target=None) -> str:
                 return found[0]
     candidates = list(dict.fromkeys(exact + fts + prefix))
     if not candidates:
-        raise records.RecordNotFound(f"по тексту {query[:80]!r} записей нет — найдите запись поиском "
-                                     f"(amemo search, amemo_search) и передайте её ссылку atm:/ent:")
+        raise records.RecordNotFound(f"no records for the text {query[:80]!r} — find the record with a search "
+                                     f"(amemo search, amemo_search) and pass its atm:/ent: reference")
     labels = lookup.labels(conn, candidates[:PICK_CANDIDATES], lang=lang.current())
     shown = []
     for ref in candidates[:PICK_CANDIDATES]:
@@ -661,8 +663,8 @@ def pick(conn: psycopg.Connection, text, *, target=None) -> str:
                       **{key: info[key] for key in ("kind", "entity_class", "status") if info.get(key)}})
     # канал отдаёт не больше search._CHANNEL_LIMIT строк: на пределе настоящих совпадений может быть больше
     at_limit = any(len(rows) >= search_._CHANNEL_LIMIT for rows in channels)
-    count = f"не меньше {len(candidates)}" if at_limit else str(len(candidates))
-    raise Ambiguous(f"по тексту {query[:80]!r} нашлось записей: {count}, явного лидера нет — выберите ссылку",
+    count = f"at least {len(candidates)}" if at_limit else str(len(candidates))
+    raise Ambiguous(f"records found for the text {query[:80]!r}: {count}, no clear leader — choose a reference",
                     candidates=shown)
 
 
@@ -742,7 +744,7 @@ def object_view(conn: psycopg.Connection, object_id) -> dict:
     oid = _object_id(object_id)
     view = lookup.object_view(conn, oid)
     if view is None:
-        raise objects.ObjectError(f"obj:{oid}: такого объекта нет", code="not_found")
+        raise objects.ObjectError(f"obj:{oid}: no such object", code="not_found")
     return _object_card(conn, view)
 
 
@@ -772,10 +774,10 @@ def _store_failure(store: ObjectStore, oid: uuid.UUID, n: int, error) -> Excepti
     """Почему копии нет: корня хранилища нет — StoreUnavailable (503), корень есть — CopyMissing (404)."""
     root = Path(store.root)
     if not (root / STORE_MARK).is_file():
-        return StoreUnavailable("хранилище копий не подключено: в AMEMO_DATA нет корня OCFL — проверьте, что том "
-                                "с данными смонтирован", where=f"{root}: нет {STORE_MARK}")
-    return CopyMissing(f"obj:{oid}: копии версии {n} нет в хранилище — восстановите хранилище из снимка "
-                       f"или добавьте файл заново", where=str(error))
+        return StoreUnavailable("the file store is not connected: AMEMO_DATA has no OCFL root — check that the data "
+                                "volume is mounted", where=f"{root}: no {STORE_MARK}")
+    return CopyMissing(f"obj:{oid}: the store has no copy of version {n} — restore the store from a snapshot "
+                       f"or add the file again", where=str(error))
 
 
 def _copy(store: ObjectStore, oid: uuid.UUID, n: int) -> Path:
@@ -786,7 +788,7 @@ def _copy(store: ObjectStore, oid: uuid.UUID, n: int) -> Path:
         raise _store_failure(store, oid, n, e) from e
     resolved = path.resolve()
     if not resolved.is_relative_to(store.object_dir(oid).resolve()) or not resolved.is_file():
-        raise _store_failure(store, oid, n, f"{path}: нет обычного файла копии внутри папки объекта")
+        raise _store_failure(store, oid, n, f"{path}: no regular copy file inside the object folder")
     return resolved
 
 
@@ -798,10 +800,10 @@ def object_content(conn: psycopg.Connection, store: ObjectStore, object_id, n) -
     row = conn.execute("SELECT o.original_name, o.media_type, v.digest FROM object o "
                        "JOIN object_version v ON v.object_id = o.id WHERE o.id = %s AND v.n = %s", (oid, n)).fetchone()
     if row is None:
-        raise objects.ObjectError(f"obj:{oid}: нет объекта или версии {n}", code="not_found")
+        raise objects.ObjectError(f"obj:{oid}: no such object or version {n}", code="not_found")
     name, media_type, digest = row
     if digest is None:
-        raise objects.ObjectError(f"obj:{oid}: у версии {n} нет файла (страница сайта или переписка)",
+        raise objects.ObjectError(f"obj:{oid}: version {n} has no file (a web page or a message)",
                                   code="not_found")
     path = _copy(store, oid, n)
     media = (media_type or "").partition(";")[0].strip().lower()
@@ -820,7 +822,7 @@ def object_text(conn: psycopg.Connection, store: ObjectStore, object_id, n, *, p
         raise _store_failure(store, oid, n, e) from e
     if page is not None:
         if page > len(pages):
-            raise objects.ObjectError(f"obj:{oid}: у версии {n} нет страницы {page} (страниц {len(pages)})",
+            raise objects.ObjectError(f"obj:{oid}: version {n} has no page {page} (pages: {len(pages)})",
                                       code="not_found")
         pages = [pages[page - 1]]
     return {"pages": pages}
@@ -830,7 +832,7 @@ def object_sheet(conn: psycopg.Connection, store: ObjectStore, object_id, n, *, 
     """Ячейки листа xlsx: {name, range, rows}; пустой range — окно по умолчанию (A1:L40 по данным)."""
     oid, n = _object_id(object_id), _int(n, "n", low=1, high=VERSION_MAX)
     if not _str(name, "name"):
-        raise BadRequest("name: нужно имя листа")
+        raise BadRequest("name: the name of a sheet is required")
     _str(cell_range, "range")
     try:
         return objects.sheet(conn, store, oid, n, name, cell_range or None)
@@ -842,7 +844,8 @@ def _document(conn: psycopg.Connection, path) -> tuple[str, str | None]:
     """Путь в папке документов или ссылка obj:<UUID> → (как спросили, obj:<UUID> или None — объекта ещё нет)."""
     path = _str(path, "path")
     if not path or not path.strip():
-        raise BadRequest("path: нужен путь документа от корня папки документов (или obj:<UUID>)")
+        raise BadRequest("path: the path of a document from the root of the documents folder is required (or "
+                         "obj:<UUID>)")
     if path.startswith("obj:"):
         oid = _object_id(path)
         found = conn.execute("SELECT 1 FROM object WHERE id = %s", (oid,)).fetchone()
@@ -926,13 +929,14 @@ def object_mark(conn: psycopg.Connection, store: ObjectStore, docs: Path | None,
     statuses = tuple(sorted(objects.STATUSES))
     status = _enum(status, "status", statuses)
     if status is None:
-        raise BadRequest(f"status: нужен один из {', '.join(statuses)}")
+        raise BadRequest(f"status: one of {', '.join(statuses)} is required")
     path, ref = _document(conn, path)
     if ref is None:
         if path.startswith("obj:"):
-            raise objects.ObjectError(f"{path}: такого объекта нет", code="not_found")
+            raise objects.ObjectError(f"{path}: no such object", code="not_found")
         if docs is None:
-            raise BadRequest(f"{path}: документа нет в базе, а папка документов не настроена (AMEMO_DOCS)")
+            raise BadRequest(f"{path}: the document is not in the base and the documents folder is not set "
+                             "(AMEMO_DOCS)")
         ref = f"obj:{objects.ingest(conn, store, docs, path, agent=agent).object_id}"
     objects.mark(conn, ref, status, agent=agent, note=_note(note))
     return object_status(conn, ref) | {"path": path}
@@ -943,7 +947,7 @@ def object_mark(conn: psycopg.Connection, store: ObjectStore, docs: Path | None,
 def vocab_entries(conn: psycopg.Connection, scheme) -> list[dict]:
     """VocabEntry[] схемы словаря (kind, entity_class, property, rel, …); неизвестная схема — пустой список."""
     if not _str(scheme, "scheme"):
-        raise BadRequest("scheme: нужно имя схемы словаря")
+        raise BadRequest("scheme: the name of a vocabulary scheme is required")
     return vocab.entries(conn, scheme)
 
 
@@ -998,16 +1002,16 @@ def templates(conn: psycopg.Connection, *, target=None) -> list[dict]:
 def template_put(conn: psycopg.Connection, code, draft, *, agent: str) -> dict:
     """TemplateView своего вида после правки по черновику (TemplateDraft); правит только человек (403 forbidden).
     Занятый пакетом из файла код — MineError exists (409), черновик не по проверке — invalid (422 с issues)."""
-    _person_only(agent, "свои виды правит")
+    _person_only(agent, "edits own kinds")
     code = _str(code, "code")
     if not isinstance(draft, dict):
-        raise BadRequest("тело: ожидается объект TemplateDraft")
+        raise BadRequest("body: a TemplateDraft object is expected")
     return mine.put(conn, code, draft, agent=agent)
 
 
 def template_delete(conn: psycopg.Connection, code, *, agent: str) -> None:
     """Удалить свой вид; есть записи этого вида — MineError in_use (409), своего вида нет — not_found (404)."""
-    _person_only(agent, "свои виды удаляет")
+    _person_only(agent, "deletes own kinds")
     mine.delete(conn, _str(code, "code"), agent=agent)
 
 
@@ -1029,8 +1033,8 @@ def base(conn: psycopg.Connection) -> dict:
 def base_rename(conn: psycopg.Connection, name, *, agent: str) -> dict:
     """Base после смены имени базы (db.set_base_name); имя меняет только человек, как и структуру папок."""
     if not isinstance(agent, str) or not agent.startswith("person:"):
-        raise Forbidden(f"имя базы меняет только человек (person:), а не {agent}: имя видят все, кто работает "
-                        f"с базой")
+        raise Forbidden(f"only a person (person:) changes the name of the base, not {agent}: everyone who works "
+                        f"with the base sees the name")
     db.set_base_name(conn, _str(name, "name"))
     return base(conn)
 
@@ -1046,7 +1050,7 @@ def backup_list(backup_dir: Path) -> list[dict]:
 def _person_only(agent: str, what: str) -> None:
     """Структуру папок меняет человек; модель раскладывает записи (перенос записи — порядок, а не утверждение)."""
     if not isinstance(agent, str) or not agent.startswith("person:"):
-        raise Forbidden(f"{what} только человек (person:), а не {agent}: модель переносит записи по папкам "
+        raise Forbidden(f"only a person (person:) {what}, not {agent}: a model moves records between folders "
                         f"(PATCH /records/{{ref}}/folder, amemo_move)")
 
 
@@ -1055,27 +1059,27 @@ def _person_only(agent: str, what: str) -> None:
 def _folder_path(value, name: str) -> str:
     """Путь папки из тела или пути запроса: строка без NUL; правила пути проверяет folders.check (422)."""
     if value is None:
-        raise BadRequest(f"{name}: нужен путь папки")
+        raise BadRequest(f"{name}: a folder path is required")
     return _str(value, name)
 
 
 def folder_create(conn: psycopg.Connection, path, *, agent: str) -> dict:
     """Folder: новая пустая папка в реестре (с родителями); уже есть — FolderError exists (409)."""
-    _person_only(agent, "папки создаёт")
+    _person_only(agent, "creates folders")
     made = folders.create(conn, _folder_path(path, "path"), agent=agent)
     return {"path": made["path"], "name": made["name"], "count": 0, "children": []}
 
 
 def folder_delete(conn: psycopg.Connection, path, *, agent: str) -> None:
     """Удалить пустую папку; с записями или вложенными — FolderError not_empty (409), нет такой — not_found (404)."""
-    _person_only(agent, "папки удаляет")
+    _person_only(agent, "deletes folders")
     folders.delete(conn, _folder_path(path, "path"))
 
 
 def folder_rename(conn: psycopg.Connection, path, new_path, *, agent: str) -> dict:
     """FolderRenamed: папка с вложенными и записями — на новый путь; занятый путь — FolderError exists (409)."""
-    _person_only(agent, "папки переименовывает")
-    return folders.rename(conn, _folder_path(path, "path"), _folder_path(new_path, "path (новый путь)"),
+    _person_only(agent, "renames folders")
+    return folders.rename(conn, _folder_path(path, "path"), _folder_path(new_path, "path (the new path)"),
                           agent=agent)
 
 
@@ -1086,8 +1090,8 @@ def record_folder(conn: psycopg.Connection, ref, folder, *, agent: str) -> dict:
     ref, folder = _ref(ref), _str(folder, "folder")
     if folder is not None and not (isinstance(agent, str) and agent.startswith("person:")) \
             and not folders.exists(conn, folder):
-        raise folders.FolderError(f"папки {folders.check(folder)!r} нет: модель переносит записи только в "
-                                  f"существующие папки, новую создаёт человек", code="not_found")
+        raise folders.FolderError(f"no folder {folders.check(folder)!r}: a model moves records only to "
+                                  f"existing folders, a new one is created by a person", code="not_found")
     moved = folders.move(conn, ref, folder, agent=agent)
     return _summaries(conn, [lookup.summary(conn, moved["ref"], lang=lang.current())])[0]
 
@@ -1100,12 +1104,12 @@ def records_folder(conn: psycopg.Connection, refs, folder, *, agent: str) -> dic
     транзакцией. Права — как у record_folder. Ответ: moved — по записи {ref, from, to, moved}, count — сколько
     переехало; from нужен отмене: вернуть каждую запись в её прежнюю папку."""
     if not isinstance(refs, list) or not refs or len(refs) > MOVE_LIMIT:
-        raise BadRequest(f"refs: нужен непустой список ссылок, не больше {MOVE_LIMIT}")
+        raise BadRequest(f"refs: a non-empty list of references is required, at most {MOVE_LIMIT}")
     refs, folder = [_ref(r) for r in refs], _str(folder, "folder")
     if folder is not None and not (isinstance(agent, str) and agent.startswith("person:")) \
             and not folders.exists(conn, folder):
-        raise folders.FolderError(f"папки {folders.check(folder)!r} нет: модель переносит записи только в "
-                                  f"существующие папки, новую создаёт человек", code="not_found")
+        raise folders.FolderError(f"no folder {folders.check(folder)!r}: a model moves records only to "
+                                  f"existing folders, a new one is created by a person", code="not_found")
     moved = folders.move_many(conn, refs, folder, agent=agent)
     return {"moved": moved, "count": sum(1 for m in moved if m["moved"])}
 
@@ -1124,7 +1128,7 @@ def _item_id(value) -> uuid.UUID:
     try:
         return uuid.UUID(_str(value, "id") or "")
     except ValueError:
-        raise BadRequest(f"id {value!r}: нужен UUID пункта очереди") from None
+        raise BadRequest(f"id {value!r}: the UUID of a queue item is required") from None
 
 
 def review_items(conn: psycopg.Connection, *, state=None, reason=None, record=None, limit=None) -> list[dict]:
@@ -1134,7 +1138,8 @@ def review_items(conn: psycopg.Connection, *, state=None, reason=None, record=No
         try:
             uuid.UUID(record)
         except ValueError:
-            raise BadRequest(f"record {record!r}: нужна ссылка atm:/ent: (UUID или ключ) или UUID записи") from None
+            raise BadRequest(f"record {record!r}: a reference atm:/ent: (a UUID or a key) or the UUID of a record is "
+                             "required") from None
     rows = review.items(conn, state=_enum(state, "state", review.STATES),
                         reason=_enum(reason, "reason", review.REASONS), record=record,
                         limit=_int(limit, "limit", low=1, high=REVIEW_LIMIT, default=100))
@@ -1203,7 +1208,7 @@ def _number(value, name: str, *, low: float, high: float) -> float | None:
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
-        raise BadRequest(f"{name} {value!r}: нужно число от {low:g} до {high:g}")
+        raise BadRequest(f"{name} {value!r}: a number from {low:g} to {high:g} is required")
     return float(value)
 
 
@@ -1219,7 +1224,7 @@ def review_resolve(conn: psycopg.Connection, item_id, *, agent: str, outcome, no
     человек решает всё (confirmed, refuted), модель — только semantic, не свой пакет и с уверенностью confidence."""
     iid = _item_id(item_id)
     if outcome in (None, ""):
-        raise BadRequest(f"outcome: нужен исход — {', '.join(OUTCOMES)}")
+        raise BadRequest(f"outcome: an outcome is required — {', '.join(OUTCOMES)}")
     result = review.resolve(conn, iid, _enum(outcome, "outcome", OUTCOMES), agent=agent,
                             confidence=_number(confidence, "confidence", low=0, high=1),
                             note=_note(note))
@@ -1230,7 +1235,7 @@ def review_resolve(conn: psycopg.Connection, item_id, *, agent: str, outcome, no
 def review_enqueue(conn: psycopg.Connection, *, agent: str, ref, reason, note=None) -> dict:
     """Поставить пункт audit или calibration на текущую ревизию записи (только человек); {item_id}."""
     if reason in (None, ""):
-        raise BadRequest(f"reason: нужна причина — {', '.join(review.MANUAL_REASONS)}")
+        raise BadRequest(f"reason: a reason is required — {', '.join(review.MANUAL_REASONS)}")
     item_id = review.enqueue(conn, _ref(ref), _enum(reason, "reason", review.MANUAL_REASONS), agent=agent,
                              note=_note(note))
     return {"item_id": str(item_id)}
@@ -1269,22 +1274,22 @@ def _task_id(value) -> uuid.UUID:
     try:
         return uuid.UUID(_str(value, "task_id") or "")
     except ValueError:
-        raise BadRequest(f"task_id {value!r}: нужен UUID задачи") from None
+        raise BadRequest(f"task_id {value!r}: the UUID of a task is required") from None
 
 
 def task_create(conn: psycopg.Connection, *, agent: str, kind, object, version, note=None) -> tuple[dict, bool]:
     """Поставить задачу ({task_id}, создана ли): незакрытая задача на ту же версию уже есть — её id. Ставят человек
     и модель; объект — UUID или obj:<UUID>, версия — её номер."""
     if kind in (None, ""):
-        raise BadRequest(f"kind: нужен вид задачи — {', '.join(tasks.KINDS)}")
+        raise BadRequest(f"kind: a task kind is required — {', '.join(tasks.KINDS)}")
     kind = _enum(kind, "kind", tasks.KINDS)
     if object in (None, ""):
-        raise BadRequest("object: нужен id объекта")
+        raise BadRequest("object: the id of an object is required")
     if version is None:
-        raise BadRequest("version: нужен номер версии объекта")
+        raise BadRequest("version: the version number of the object is required")
     note = _note(note)
     if note is not None and len(note) > TASK_NOTE_MAX:
-        raise BadRequest(f"note: больше {TASK_NOTE_MAX} знаков")
+        raise BadRequest(f"note: over {TASK_NOTE_MAX} characters")
     task, created = tasks.create(conn, kind, _object_id(object), _int(version, "version", low=1, high=VERSION_MAX),
                                  agent=agent, note=note)
     return {"task_id": str(task["id"])}, created
@@ -1319,13 +1324,13 @@ def task_done(conn: psycopg.Connection, task_id, *, agent: str, result=None) -> 
     warnings: list[dict] = []
     if result is not None:
         if not isinstance(result, dict):
-            raise BadRequest("result: нужен объект JSON, например {\"refs\": [\"atm:…\"], \"note\": \"…\"}")
+            raise BadRequest("result: a JSON object is required, for example {\"refs\": [\"atm:…\"], \"note\": \"…\"}")
         removed: list[str] = []
         found: list[tuple[str, list[str]]] = []
         result = _scrub(result, "result", removed, strip=True, secrets=found)
         if len(json.dumps(result, ensure_ascii=False).encode()) > TASK_RESULT_MAX:
-            raise BadRequest(f"result: больше {TASK_RESULT_MAX // 1024} КиБ — оставьте ссылки записей и короткую "
-                             f"заметку")
+            raise BadRequest(f"result: over {TASK_RESULT_MAX // 1024} KiB — keep the references of records and a short "
+                             f"note")
         warnings = _private_removed("result", removed) + _secret_like("result", found)
     task = task_view(tasks.done(conn, _task_id(task_id), agent=agent, result=result), full=True)
     return {"task": task, "warnings": warnings}
@@ -1349,14 +1354,14 @@ def _scrub(value, where: str, removed: list[str], *, strip: bool, path: str = ""
     на секрет (private.secret_like по оставшемуся тексту), и виды — в secrets. NUL в строке или ключе, метка <private>
     в ключе и вложенность глубже BODY_DEPTH — BadRequest (до проверки и базы)."""
     if depth > BODY_DEPTH:
-        raise BadRequest(f"{where}: вложенность глубже {BODY_DEPTH} уровней")
+        raise BadRequest(f"{where}: nested deeper than {BODY_DEPTH} levels")
     place = f"{where}.{path}" if path else where
     if isinstance(value, str):
         out = private.strip(value) if strip else value
         if out != value:
             removed.append(path)
         if "\x00" in out:
-            raise BadRequest(f"{place}: знак NUL (\\x00) в строке не допускается")
+            raise BadRequest(f"{place}: a NUL character (\\x00) is not allowed in a string")
         if secrets is not None and (kinds := private.secret_like(out)):
             secrets.append((path, kinds))
         return out
@@ -1364,10 +1369,11 @@ def _scrub(value, where: str, removed: list[str], *, strip: bool, path: str = ""
         out = {}
         for key, item in value.items():
             if "\x00" in key:
-                raise BadRequest(f"{place}: знак NUL (\\x00) в имени поля не допускается")
+                raise BadRequest(f"{place}: a NUL character (\\x00) is not allowed in a field name")
             if private.marked(key):              # сам ключ в ответ не попадает: в нём и есть скрытое
-                raise BadRequest(f"{place}: имя поля с меткой <private> не допускается — скрытое в имени поля "
-                                 f"не вырезать; уберите метку из имени")
+                raise BadRequest(f"{place}: a field name with the <private> mark is not allowed — what is hidden in a "
+                                 "field name "
+                                 f"cannot be cut out; remove the mark from the name")
             out[key] = _scrub(item, where, removed, strip=strip, path=f"{path}.{key}" if path else key,
                               depth=depth + 1, secrets=secrets)
         return out
@@ -1379,21 +1385,23 @@ def _scrub(value, where: str, removed: list[str], *, strip: bool, path: str = ""
 
 def _private_removed(ref: str, paths: list[str]) -> list[dict]:
     return [{"code": PRIVATE_REMOVED, "severity": "warning", "ref": ref, "path": path,
-             "message": "Скрытое в <private>…</private> вырезано: в ревизию оно не попало"} for path in paths]
+             "message": "What was hidden in <private>…</private> is cut out: it did not get into the "
+                        "revision"} for path in paths]
 
 
-SECRET_KINDS = {"aws_access_key": "ключ AWS", "github_token": "токен GitHub", "api_key": "ключ API (sk-…)",
-                "slack_token": "токен Slack", "google_api_key": "ключ Google API", "stripe_key": "ключ Stripe",
-                "amemo_token": "токен amemo", "private_key": "приватный ключ PEM", "jwt": "токен JWT",
-                "url_password": "пароль в строке подключения", "password": "пароль"}
+SECRET_KINDS = {"aws_access_key": "AWS key", "github_token": "GitHub token", "api_key": "API key (sk-…)",
+                "slack_token": "Slack token", "google_api_key": "Google API key", "stripe_key": "Stripe key",
+                "amemo_token": "amemo token", "private_key": "PEM private key", "jwt": "JWT token",
+                "url_password": "a password in a connection string", "password": "password"}
 
 
 def _secret_like(ref: str, found: list[tuple[str, list[str]]]) -> list[dict]:
     """Предупреждения secret_like: поле, похожее на секрет, и вид; самого значения в ответе нет."""
     return [{"code": SECRET_LIKE, "severity": "warning", "ref": ref, "path": path,
-             "message": f"Похоже на секрет ({', '.join(SECRET_KINDS.get(k, k) for k in kinds)}): значение записано "
-                        f"как есть — если это секрет, исправьте запись; скрыть при записи можно меткой "
-                        f"<private>…</private>"} for path, kinds in found]
+             "message": f"Looks like a secret ({', '.join(SECRET_KINDS.get(k, k) for k in kinds)}): the value is "
+                        "written "
+                        f"as it is — if it is a secret, fix the record; the mark "
+                        f"<private>…</private> hides a value when writing"} for path, kinds in found]
 
 
 def _proposal_label(label: str) -> str:
@@ -1420,17 +1428,17 @@ def submit(conn: psycopg.Connection, store: ObjectStore, docs: Path | None, *, a
     проверки — CheckRejected (422) с issues; ошибка провайдера эмбеддингов только ослабляет уровень 4 (degraded
     отчёта)."""
     if not isinstance(proposals, list) or not proposals:
-        raise BadRequest("proposals: нужен непустой список предложений [{target, payload, record_id?}]")
+        raise BadRequest("proposals: a non-empty list of proposals [{target, payload, record_id?}] is required")
     links = [] if links is None else links
     if not isinstance(links, list):
-        raise BadRequest("links: нужен список тел связей")
+        raise BadRequest("links: a list of link bodies is required")
     warnings: list[dict] = []
     names: set[str] = set()
     items = []
     for i, proposal in enumerate(proposals):
         where = f"proposals[{i}]"
         if not isinstance(proposal, dict):
-            raise BadRequest(f"{where}: нужен объект {{target, payload, record_id?}}")
+            raise BadRequest(f"{where}: an object {{target, payload, record_id?}} is required")
         payload, target = proposal.get("payload"), _str(proposal.get("target"), f"{where}.target")
         ref = payload.get("ref") if isinstance(payload, dict) else None
         named = isinstance(ref, str) and level1.NAME.fullmatch(ref) is not None
@@ -1568,8 +1576,8 @@ def _remove(path: Path) -> None:
 
 def _stored(state: Path, kind: str, value, owner: str) -> tuple[Path, dict]:
     """Папка своей подборки (kind=BUNDLES) или загрузки (UPLOADS) и её meta; нет, чужая, просрочена — Missing."""
-    what = "подборки" if kind == BUNDLES else "загрузки"
-    missing = Missing(f"{what} {str(value)[:80]!r} нет: срок хранения — сутки, после него сделайте заново")
+    what = "bundle" if kind == BUNDLES else "upload"
+    missing = Missing(f"the {what} {str(value)[:80]!r} is gone: it is kept for a day, make it again")
     bid = _state_id(value)
     if bid is None:
         raise missing
@@ -1617,13 +1625,13 @@ def state_usage(state: Path, owner: str) -> int:
 
 
 def _mib(size: int) -> str:
-    return f"{size / (1 << 30):.1f} ГиБ" if size >= 1 << 30 else f"{size / (1 << 20):.1f} МиБ"
+    return f"{size / (1 << 30):.1f} GiB" if size >= 1 << 30 else f"{size / (1 << 20):.1f} MiB"
 
 
 def quota_exceeded(used: int, quota: int, what: str) -> QuotaExceeded:
-    return QuotaExceeded(f"{what}: подборки и загрузки этого входа заняли бы больше предела {_mib(quota)} "
-                         f"(уже занято {_mib(used)}); старые удаляются через сутки — подождите, сузьте отбор "
-                         f"или увеличьте AMEMO_STATE_QUOTA")
+    return QuotaExceeded(f"{what}: bundles and uploads of this login would take more than the limit of {_mib(quota)} "
+                         f"({_mib(used)} is already taken); old ones are removed in a day — wait, narrow the selection "
+                         f"or raise AMEMO_STATE_QUOTA")
 
 
 def upload_room(state: Path, owner: str, quota: int | None) -> int | None:
@@ -1632,7 +1640,7 @@ def upload_room(state: Path, owner: str, quota: int | None) -> int | None:
         return None
     used = state_usage(state, owner)
     if used >= quota:
-        raise quota_exceeded(used, quota, "загрузка подборки")
+        raise quota_exceeded(used, quota, "bundle upload")
     return quota - used
 
 
@@ -1676,16 +1684,16 @@ def _selection(value) -> bundle.Selection:
     """bundle.Selection из тела запроса (схема Selection): {} — вся база; неизвестное поле — BadRequest (опечатка
     в условии иначе тихо выгрузила бы всё)."""
     if value is None:
-        raise BadRequest("selection: нужен объект отбора ({} — вся база)")
+        raise BadRequest("selection: a selection object is required ({} — the whole base)")
     if not isinstance(value, dict):
-        raise BadRequest(f"selection: нужен объект, а не {type(value).__name__}")
+        raise BadRequest(f"selection: an object is required, not {type(value).__name__}")
     unknown = sorted(set(value) - set(SELECTION_FIELDS))
     if unknown:
-        raise BadRequest(f"selection: неизвестные поля {', '.join(map(str, unknown))}; допустимы "
+        raise BadRequest(f"selection: unknown fields {', '.join(map(str, unknown))}; allowed are "
                          f"{', '.join(SELECTION_FIELDS)}")
     project = _str(value.get("project"), "selection.project")
     if project is not None and not _ref(project, "selection.project").startswith("ent:"):
-        raise BadRequest(f"selection.project {project!r}: нужна сущность ent:<UUID или ключ>")
+        raise BadRequest(f"selection.project {project!r}: an entity ent:<UUID or key> is required")
     lists = {name: tuple(_codes(value.get(name), f"selection.{name}") or ())
              for name in ("tags", "kinds", "entity_classes", "refs")}
     for ref in lists["refs"]:
@@ -1693,7 +1701,7 @@ def _selection(value) -> bundle.Selection:
     statuses = _codes(value.get("statuses"), "selection.statuses")
     unknown = sorted(set(statuses or ()) - set(STATUSES))
     if unknown:
-        raise BadRequest(f"selection.statuses: неизвестные статусы {', '.join(unknown)}")
+        raise BadRequest(f"selection.statuses: unknown statuses {', '.join(unknown)}")
     return bundle.Selection(**lists, project=project, statuses=tuple(statuses or bundle.DEFAULT_STATUSES),
                             since=_moment(value.get("since"), "selection.since"),
                             include_private=_bool(value.get("include_private"), "selection.include_private",
@@ -1719,22 +1727,22 @@ def bundle_export(conn: psycopg.Connection, store: ObjectStore, state: Path, *, 
     sel = _selection(selection)
     fmt = _str(notes_format, "format") or "bundle"
     if fmt not in ("bundle", "markdown"):
-        raise BadRequest(f"format {fmt!r}: нужно bundle или markdown")
+        raise BadRequest(f"format {fmt!r}: bundle or markdown is required")
     md_lang = _str(notes_lang, "lang") or "ru"
     if md_lang not in notes_md.DIRS:
-        raise BadRequest(f"lang {md_lang!r}: нужно {' или '.join(notes_md.DIRS)}")
+        raise BadRequest(f"lang {md_lang!r}: {' or '.join(notes_md.DIRS)} is required")
     files = _bool(with_files, "with_files", default=False)
     packs_ = _bool(with_packs, "with_packs", default=False)
     is_anthology = _bool(anthology, "anthology", default=False)
     title = _str(title, "title")
     if title is not None and len(title) > TITLE_MAX:
-        raise BadRequest(f"title: длиннее {TITLE_MAX} знаков")
+        raise BadRequest(f"title: longer than {TITLE_MAX} characters")
     if is_anthology and packs_:
-        raise BadRequest("with_packs: антология пакеты не копирует — у получателя нужны те же пакеты")
+        raise BadRequest("with_packs: an anthology does not copy packs — the receiver needs the same packs")
     if fmt == "markdown" and (is_anthology or packs_):
-        raise BadRequest("format markdown: заметки — без антологии и без пакетов")
+        raise BadRequest("format markdown: notes go without an anthology and without packs")
     if quota is not None and (used := state_usage(state, owner)) >= quota:
-        raise quota_exceeded(used, quota, "экспорт подборки")
+        raise quota_exceeded(used, quota, "bundle export")
     bid = str(uuid7())
     folder = Path(state) / BUNDLES / bid
     folder.mkdir(parents=True)
@@ -1754,7 +1762,7 @@ def bundle_export(conn: psycopg.Connection, store: ObjectStore, state: Path, *, 
                              "counts": manifest["counts"], "packs": [p["name"] for p in manifest["packs"]],
                              "with_files": manifest["with_files"], "with_packs": manifest["with_packs"],
                              "selection": manifest["selection"], "anthology": is_anthology})
-        _within_quota(state, owner, quota, folder, "экспорт подборки")
+        _within_quota(state, owner, quota, folder, "bundle export")
         _write_meta(folder, {"owner": owner, "created_at": _now(), "anthology": is_anthology,
                              "filename": _filename(title or ("Антология" if is_anthology else
                                                              "amemo-notes" if fmt == "markdown" else None), bid)})
@@ -1782,7 +1790,7 @@ def bundle_report(state: Path, bundle_id, *, owner: str) -> Path:
     folder, _ = _stored(state, BUNDLES, bundle_id, owner)
     report = folder / REPORT_FILE
     if report.is_symlink() or not report.is_file():
-        raise Missing(f"у подборки {folder.name} нет отчёта: он есть только у антологии (anthology: true)")
+        raise Missing(f"the bundle {folder.name} has no report: only an anthology has one (anthology: true)")
     return report
 
 
@@ -1812,7 +1820,7 @@ def upload_finish(state: Path, upload_id: str, part: Path, *, owner: str, quota:
         else:
             root = bundle.unpack(part, folder / UPLOAD_DIR)
             Path(part).unlink()
-        _within_quota(state, owner, quota, folder, "загрузка подборки")
+        _within_quota(state, owner, quota, folder, "bundle upload")
         report = notes_md.inspect(root) if notes_md.is_notes(root) else bundle.inspect(root)
         _write_meta(folder, {"owner": owner, "created_at": _now()})
     except BaseException:
@@ -1830,10 +1838,10 @@ def bundle_import(conn: psycopg.Connection, store: ObjectStore, state: Path, upl
     dry = _bool(dry_run, "dry_run", default=True)
     trust = _enum(trust, "trust", bundle.TRUST, default="keep")
     if not dry and not can_write:
-        raise ReadOnly(f"вход {agent} — только для чтения: доступен пробный импорт (dry_run: true)")
+        raise ReadOnly(f"the login {agent} is read-only: a trial import is available (dry_run: true)")
     if not dry and not (isinstance(agent, str) and agent.startswith("person:")):
-        raise Forbidden(f"подборку в базу вливает только человек (person:), а не {agent}: модели доступен "
-                        f"пробный импорт (dry_run: true)")
+        raise Forbidden(f"only a person (person:) merges a bundle into the base, not {agent}: a model can run "
+                        f"a trial import (dry_run: true)")
     folder, _ = _stored(state, UPLOADS, upload_id, owner)
     if notes_md.is_notes(folder / UPLOAD_DIR):
         return _jsonable(notes_md.import_(conn, store, docs, folder / UPLOAD_DIR, agent=agent, dry_run=dry))

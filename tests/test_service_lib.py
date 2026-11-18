@@ -290,7 +290,7 @@ def test_review_error_closed_says_who_and_when(kb):
 
     e = error_of(review.resolve, kb, item, "refuted", agent=HUMAN)
     assert e.code == "closed" and e.by == HUMAN and e.at == closed_at
-    assert "уже закрыт" in str(e)                                        # сообщение прежнее
+    assert "already closed" in str(e)                                        # сообщение прежнее
     e = error_of(review.release, kb, item, agent=HUMAN)
     assert e.code == "closed" and e.by == HUMAN and e.at == closed_at
 
@@ -300,7 +300,7 @@ def test_review_error_closed_obsolete_has_no_author(kb):
     records.commit(kb, [Item("atom", {"kind": "fact", "key": "r", "label": {"ru": "Новая редакция"},
                                       "summary_plain": {"ru": "Новая"}, "codes": []}, rev.record_id)], agent=HUMAN)
     e = error_of(review.resolve, kb, item, "confirmed", confidence=0.9, agent="model:judge")
-    assert e.code == "stale" and "устарел" in str(e)
+    assert e.code == "stale" and "stale" in str(e)
     closed_at = kb.execute("SELECT closed_at FROM review_item WHERE id = %s", (item,)).fetchone()[0]
     e = error_of(review.resolve, kb, item, "confirmed", agent=HUMAN)
     assert e.code == "closed" and e.by is None and e.at == closed_at
@@ -321,7 +321,7 @@ def test_review_error_forbidden_bad_outcome_claimed(kb):
 
     review.claim(kb, agent="model:other")
     e = error_of(review.resolve, kb, semantic, "confirmed", confidence=0.9, agent="model:judge")
-    assert e.code == "claimed" and "захвачен" in str(e)
+    assert e.code == "claimed" and "claimed" in str(e)
     assert error_of(review.release, kb, semantic, agent="model:judge").code == "claimed"
 
 

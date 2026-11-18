@@ -122,9 +122,9 @@ def test_person_author_gets_own_semantic(kb, store, docs):
 
 def test_claim_rejects_unknown_reasons(kb, store, docs):
     send(kb, store, docs, wind())
-    with pytest.raises(review.ReviewError, match="неизвестные причины"):
+    with pytest.raises(review.ReviewError, match="unknown reasons"):
         review.claim(kb, agent=PERSON, reasons=["semantic", "nonsense"])
-    with pytest.raises(review.ReviewError, match="не строка"):
+    with pytest.raises(review.ReviewError, match="not a string"):
         review.claim(kb, agent=MODEL, reasons="semantic")
     assert review.claim(kb, agent=MODEL, reasons=["warning"]) == []        # известная, но недоступная — фильтр
     assert kb.execute("SELECT count(*) FROM review_item WHERE state = 'claimed'").fetchone()[0] == 0
@@ -184,7 +184,7 @@ def test_expired_lease_goes_to_another(kb, store, docs):
 def test_release(kb, store, docs):
     s = send(kb, store, docs, wind())
     [got] = review.claim(kb, agent=MODEL)
-    with pytest.raises(review.ReviewError, match="держит"):
+    with pytest.raises(review.ReviewError, match="not held by"):
         review.release(kb, got["id"], agent="model:other")
     review.release(kb, got["id"], agent=MODEL)
     row = kb.execute("SELECT state, claimed_by, claimed_until FROM review_item WHERE id = %s",
@@ -245,7 +245,7 @@ def test_model_without_confidence_is_error(kb, store, docs):
 
 def test_author_model_cannot_resolve_its_semantic(kb, store, docs):
     s = send(kb, store, docs, wind())
-    with pytest.raises(review.ReviewError, match="автор"):
+    with pytest.raises(review.ReviewError, match="author"):
         review.resolve(kb, queued(s, "semantic"), "confirmed", confidence=0.9, agent=AUTHOR)
 
 
@@ -262,7 +262,7 @@ def test_person_on_semantic(kb, store, docs):
 def test_claimed_by_other_cannot_be_resolved(kb, store, docs):
     s = send(kb, store, docs, wind())
     review.claim(kb, agent="model:other")
-    with pytest.raises(review.ReviewError, match="захвачен"):
+    with pytest.raises(review.ReviewError, match="claimed"):
         review.resolve(kb, queued(s, "semantic"), "confirmed", confidence=0.9, agent=MODEL)
     later = datetime.now(timezone.utc) + timedelta(minutes=20)
     out = review.resolve(kb, queued(s, "semantic"), "confirmed", confidence=0.9, agent=MODEL, now=later)
@@ -272,7 +272,7 @@ def test_claimed_by_other_cannot_be_resolved(kb, store, docs):
 def test_resolved_item_cannot_be_resolved_again(kb, store, docs):
     s = send(kb, store, docs, wind())
     review.resolve(kb, queued(s, "semantic"), "confirmed", agent=PERSON)
-    with pytest.raises(review.ReviewError, match="закрыт"):
+    with pytest.raises(review.ReviewError, match="closed"):
         review.resolve(kb, queued(s, "semantic"), "refuted", agent=PERSON)
 
 
@@ -281,7 +281,7 @@ def test_resolved_item_cannot_be_resolved_again(kb, store, docs):
 def test_warning_rights_and_refute(kb, store, docs):
     w = warned(kb, store, docs)
     rec = w.records[0]
-    with pytest.raises(review.ReviewError, match="только человек"):
+    with pytest.raises(review.ReviewError, match="only a person"):
         review.resolve(kb, queued(w, "warning"), "confirmed", confidence=0.9, agent=MODEL)
     with pytest.raises(review.ReviewError, match="partial"):
         review.resolve(kb, queued(w, "warning"), "partial", agent=PERSON)
@@ -380,7 +380,7 @@ def test_edit_decided_even_when_status_moved(kb, store, docs):
 
 def test_edit_by_model_is_error(kb, store, docs):
     _, result = edited(kb, store, docs)
-    with pytest.raises(review.ReviewError, match="только человек"):
+    with pytest.raises(review.ReviewError, match="only a person"):
         review.resolve(kb, queued(result, "edit"), "confirmed", confidence=0.9, agent=MODEL)
 
 
@@ -466,7 +466,7 @@ def test_stale_item_is_closed_on_claim(kb, store, docs):
 def test_stale_item_is_closed_on_resolve(kb, store, docs):
     s = send(kb, store, docs, wind())
     bypass(kb, s.records[0])
-    with pytest.raises(review.ReviewError, match="устарел"):
+    with pytest.raises(review.ReviewError, match="stale"):
         review.resolve(kb, queued(s, "semantic"), "confirmed", confidence=0.9, agent=MODEL)
     assert state(kb, queued(s, "semantic")) == "obsolete"
     assert kb.execute("SELECT count(*) FROM verification").fetchone()[0] == 0
@@ -477,16 +477,16 @@ def test_stale_check_comes_before_lease_and_rights(kb, store, docs):
     s = send(kb, store, docs, wind())
     review.claim(kb, agent="model:other")
     bypass(kb, s.records[0])
-    with pytest.raises(review.ReviewError, match="устарел"):
+    with pytest.raises(review.ReviewError, match="stale"):
         review.resolve(kb, queued(s, "semantic"), "confirmed", confidence=0.9, agent=MODEL)
     assert state(kb, queued(s, "semantic")) == "obsolete"
     w = warned(kb, store, docs)
     records.commit(kb, [records.Item("atom", atom(None, label=lab("Кронштейн, новая редакция"), sources=None),
                                      w.records[0]["record_id"])], agent=PERSON)
-    with pytest.raises(review.ReviewError, match="устарел"):
+    with pytest.raises(review.ReviewError, match="stale"):
         review.resolve(kb, queued(w, "warning"), "confirmed", confidence=0.9, agent=MODEL)
     assert state(kb, queued(w, "warning")) == "obsolete"
-    with pytest.raises(review.ReviewError, match="закрыт"):
+    with pytest.raises(review.ReviewError, match="closed"):
         review.resolve(kb, queued(w, "warning"), "confirmed", agent=PERSON)
 
 
@@ -541,7 +541,7 @@ def test_enqueue_calibration(kb, store, docs):
         review.enqueue(kb, ref, "calibration", agent=MODEL)
     with pytest.raises(review.ReviewError, match="calibration"):
         review.enqueue(kb, ref, "semantic", agent=PERSON)
-    with pytest.raises(review.ReviewError, match="записи нет"):
+    with pytest.raises(review.ReviewError, match="no such record"):
         review.enqueue(kb, "ent:01900000-0000-7000-8000-000000000001", "audit", agent=PERSON)
 
 
@@ -567,11 +567,11 @@ def test_items_record_by_key_uuid_and_bad_arguments(kb, store, docs):
     assert [i["id"] for i in review.items(kb, record=str(rec))] == expected
     with pytest.raises(review.ReviewError, match="atm:wind.ii"):
         review.items(kb, record="wind.ii")                       # ключ без приставки — подсказка
-    with pytest.raises(review.ReviewError, match="нет записи с ключом"):
+    with pytest.raises(review.ReviewError, match="no record with the key"):
         review.items(kb, record="atm:nope")
-    with pytest.raises(review.ReviewError, match="состояние"):
+    with pytest.raises(review.ReviewError, match="state"):
         review.items(kb, state="open")
-    with pytest.raises(review.ReviewError, match="причина"):
+    with pytest.raises(review.ReviewError, match="reason"):
         review.items(kb, reason="nonsense")
     for limit in (0, -1, "5", True):
         with pytest.raises(review.ReviewError, match="limit"):

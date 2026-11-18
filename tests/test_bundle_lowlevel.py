@@ -38,7 +38,7 @@ def test_keep_ids_new_record_with_ref_and_status(pg):
 
 def test_without_keep_ids_unknown_record_id_is_error(pg):
     db.prepare(pg)
-    with pytest.raises(records.RecordError, match="такой записи нет"):
+    with pytest.raises(records.RecordError, match="no such record"):
         records.commit(pg, [Item("atom", note(), record_id=uuid7())], agent=AGENT)
     assert pg.execute("SELECT count(*) FROM atom").fetchone()[0] == 0
 
@@ -59,7 +59,7 @@ def test_keep_ids_checks_id_format_and_other_target(pg):
         records.commit(pg, [Item("atom", note(), record_id=uuid.uuid4())], agent=AGENT, keep_ids=True)
     entity = records.commit(pg, [Item("entity", {"entity_class": "document", "label": {"ru": "Документ"}})],
                             agent=AGENT).revisions[0].record_id
-    with pytest.raises(records.RecordError, match="уже занят"):
+    with pytest.raises(records.RecordError, match="already taken"):
         records.commit(pg, [Item("atom", note(), record_id=entity)], agent=AGENT, keep_ids=True)
     assert pg.execute("SELECT count(*) FROM atom").fetchone()[0] == 0
 
@@ -163,7 +163,7 @@ def test_adopt_without_files_then_ingest_works(pg, store, docs, tmp_path):
 def test_keep_ids_same_new_id_twice_is_error(pg):
     db.prepare(pg)
     rid = uuid7()
-    with pytest.raises(records.RecordError, match="два раза"):
+    with pytest.raises(records.RecordError, match="twice"):
         records.commit(pg, [Item("atom", note(), record_id=rid), Item("atom", note("Другой."), record_id=rid)],
                        agent=AGENT, keep_ids=True)
     assert pg.execute("SELECT count(*) FROM atom").fetchone()[0] == 0

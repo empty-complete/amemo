@@ -115,7 +115,7 @@ def test_depth_rel_status_and_missing_start(kb):
     for depth in (0, 4, -1, True, "2"):
         with pytest.raises(RecordError, match="depth"):
             around(kb, refs["@root"], depth=depth)
-    with pytest.raises(RecordError, match="такой записи нет"):
+    with pytest.raises(RecordError, match="no such record"):
         around(kb, f"ent:{ids.uuid7()}")
     with pytest.raises(RecordError, match="ref|UUID"):
         around(kb, "ent:not-a-uuid")
@@ -539,7 +539,7 @@ def test_overview_of_a_project(kb):
         {refs["@p3"]}
     assert {n["ref"] for n in recipes.overview(kb, project="ent:else")["nodes"]} == \
         {refs["@other"], refs["@moved"], refs["@e4"], refs["@e3"]}
-    with pytest.raises(RecordError, match="сущность"):
+    with pytest.raises(RecordError, match="an entity"):
         recipes.overview(kb, project=refs["@p1"])
     with pytest.raises(RecordNotFound):
         recipes.overview(kb, project="ent:no_such")

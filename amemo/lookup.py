@@ -65,7 +65,7 @@ def _record_id(conn: psycopg.Connection, target: Target, value) -> str | None:
         return _uuid(value)
     found, record_id, _ = parse_ref(value)
     if found != target:
-        raise RecordError(f"{value}: ссылка на запись {found}, а нужна {target}")
+        raise RecordError(f"{value}: a reference to a record of {found}, but {target} is needed")
     if record_id is not None:
         return str(record_id)
     try:
@@ -76,7 +76,7 @@ def _record_id(conn: psycopg.Connection, target: Target, value) -> str | None:
 
 def _moment(at: datetime | None) -> datetime | None:
     if at is not None and (not isinstance(at, datetime) or at.tzinfo is None):
-        raise RecordError(f"at {at!r}: нужно время с часовым поясом (datetime с tzinfo)")
+        raise RecordError(f"at {at!r}: a time with a time zone is required (a datetime with tzinfo)")
     return at
 
 
@@ -158,10 +158,10 @@ def _codes(values, name: str) -> list[str] | None:
     if values is None:
         return None
     if isinstance(values, str) or not isinstance(values, Iterable):
-        raise RecordError(f"{name}: нужен набор кодов, а не {type(values).__name__}")
+        raise RecordError(f"{name}: a set of codes is required, not {type(values).__name__}")
     items = list(values)
     if not all(isinstance(v, str) for v in items):
-        raise RecordError(f"{name}: коды — строки")
+        raise RecordError(f"{name}: codes are strings")
     return list(dict.fromkeys(items)) or None
 
 
@@ -184,15 +184,16 @@ def _after(cursor) -> tuple[datetime, uuid.UUID] | None:
         return None
     try:
         if not isinstance(cursor, str):
-            raise ValueError("не строка")
+            raise ValueError("not a string")
         text = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode()
         moment, _, record_id = text.partition("|")
         at = datetime.fromisoformat(moment)
         if at.tzinfo is None:
-            raise ValueError("время без пояса")
+            raise ValueError("a time without a zone")
         return at, uuid.UUID(record_id)
     except ValueError as e:            # и binascii.Error, и UnicodeDecodeError — подклассы ValueError
-        raise RecordError(f"cursor {cursor!r}: не курсор списка записей — нужен next_cursor прошлой страницы") from e
+        raise RecordError(f"cursor {cursor!r}: not a cursor of a record list — next_cursor of the previous page is "
+                          "required") from e
 
 
 def _record_filters(t: Target, path: str | None, kinds, statuses, nested: bool = True) -> list[str]:
@@ -261,12 +262,12 @@ _EMPTY = {"items": [], "next_cursor": None, "total": 0}
 def _object_ref(about: str) -> uuid.UUID | None:
     """obj:<UUID> или голый UUID → UUID объекта; иначе None (это ссылка на сущность или неверная строка)."""
     if not isinstance(about, str):
-        raise RecordError(f"about {about!r}: нужна строка")
+        raise RecordError(f"about {about!r}: a string is required")
     try:
         return uuid.UUID(about[4:] if about.startswith("obj:") else about)
     except ValueError:
         if about.startswith("obj:"):
-            raise RecordError(f"about {about!r}: после obj: нужен UUID объекта") from None
+            raise RecordError(f"about {about!r}: the UUID of an object is required after obj:") from None
         return None
 
 
@@ -298,18 +299,18 @@ def list_records(conn: psycopg.Connection, *, folder: str | None = None, kinds: 
     Сводка: ref, target, label (на языке lang, иначе из другого слота — amemo.lang.order), kind_or_class, status,
     folder, about (ссылки ent:), tags, recorded_at, agent."""
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= LIST_LIMIT:
-        raise RecordError(f"limit {limit!r}: нужно целое число от 1 до {LIST_LIMIT}")
+        raise RecordError(f"limit {limit!r}: an integer from 1 to {LIST_LIMIT} is required")
     if not isinstance(nested, bool):
-        raise RecordError(f"nested {nested!r}: нужно true или false")
+        raise RecordError(f"nested {nested!r}: true or false is required")
     kinds = _codes(kinds, "kinds")
     statuses = _codes(statuses, "statuses")
     lang = _lang(lang)
     unknown = set(statuses or ()) - set(search._STATUSES)
     if unknown:
-        raise RecordError(f"statuses: неизвестные статусы {', '.join(sorted(unknown))}")
+        raise RecordError(f"statuses: unknown statuses {', '.join(sorted(unknown))}")
     tags = [tag] if isinstance(tag, str) or tag is None else list(tag) if isinstance(tag, (list, tuple, set)) else [tag]
     if not all(t is None or isinstance(t, str) for t in tags):
-        raise RecordError(f"tag {tag!r}: нужна строка или список строк")
+        raise RecordError(f"tag {tag!r}: a string or a list of strings is required")
     # теги в теле ревизии — в NFC (canon); пустые — без фильтра
     tags = sorted({unicodedata.normalize("NFC", t) for t in tags if t})
     tag = tags or None
@@ -328,7 +329,8 @@ def list_records(conn: psycopg.Connection, *, folder: str | None = None, kinds: 
             source_id = _object_ref(about)
             if source_id is None:
                 if parse_ref(about)[0] != "entity":
-                    raise RecordError(f"about {about!r}: нужна ссылка ent:<UUID или ключ> или obj:<UUID> объекта")
+                    raise RecordError(f"about {about!r}: a reference ent:<UUID or key> or obj:<UUID> of an object is "
+                                      "required")
                 try:
                     about_id = resolve(conn, about)[1]
                 except RecordNotFound:
@@ -368,7 +370,7 @@ def summary(conn: psycopg.Connection, ref: str, *, lang: str | None = None) -> d
         row = cur.execute(_list_page(target, [f"r.{target}_id = %(id)s"], None, lang),
                           {"id": record_id, "take": 1}).fetchone()
     if row is None:                      # запись без ревизий не бывает (records.commit) — разве что удалена сейчас
-        raise RecordNotFound(f"{ref}: такой записи нет")
+        raise RecordNotFound(f"{ref}: no such record")
     return _summary(row)
 
 
@@ -379,7 +381,7 @@ def labels(conn: psycopg.Connection, refs: Iterable[str], *, lang: str | None = 
     Ссылки — atm:/ent: с UUID или ключом; ключ ответа — ссылка как в запросе. Неизвестной или неверной ссылки
     в ответе нет: подписи нужны экрану, и одна битая ссылка не должна ронять весь ответ."""
     if isinstance(refs, str) or not isinstance(refs, Iterable):
-        raise RecordError(f"refs: нужен набор ссылок, а не {type(refs).__name__}")
+        raise RecordError(f"refs: a set of references is required, not {type(refs).__name__}")
     label = lang_.sql("r.payload->'label'", _lang(lang))
     by_id: dict[tuple[str, uuid.UUID], list[str]] = {}       # (вид, id) → ссылки запроса
     by_key: dict[tuple[str, str], list[str]] = {}            # (вид, ключ) → ссылки запроса
@@ -578,14 +580,15 @@ def _object_after(cursor) -> uuid.UUID | None:
         return None
     try:
         if not isinstance(cursor, str):
-            raise ValueError("не строка")
+            raise ValueError("not a string")
         text = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode()
         tag, _, object_id = text.partition("|")
         if tag != "obj":
-            raise ValueError("не курсор объектов")
+            raise ValueError("not a cursor of objects")
         return uuid.UUID(object_id)
     except ValueError as e:            # и binascii.Error, и UnicodeDecodeError — подклассы ValueError
-        raise RecordError(f"cursor {cursor!r}: не курсор поиска объектов — нужен next_cursor прошлой страницы") from e
+        raise RecordError(f"cursor {cursor!r}: not a cursor of an object search — next_cursor of the previous page is "
+                          "required") from e
 
 
 # род файла для отбора в «+ Источник»: типы содержимого и расширения имени (тип не всегда определён при загрузке)
@@ -613,9 +616,9 @@ def object_search(conn: psycopg.Connection, q: str | None = None, *, limit: int 
     file_type — только файлы одного рода (FILE_TYPES: по типу содержимого или расширению имени); неизвестный —
     RecordError."""
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= OBJECT_LIMIT:
-        raise RecordError(f"limit {limit!r}: нужно целое от 1 до {OBJECT_LIMIT}")
+        raise RecordError(f"limit {limit!r}: an integer from 1 to {OBJECT_LIMIT} is required")
     if q is not None and not isinstance(q, str):
-        raise RecordError(f"q {q!r}: нужна строка")
+        raise RecordError(f"q {q!r}: a string is required")
     text = unicodedata.normalize("NFC", (q or "").strip().replace("\\", "/")) or None
     after = _object_after(cursor)
     where = []
@@ -630,7 +633,7 @@ def object_search(conn: psycopg.Connection, q: str | None = None, *, limit: int 
     media, exts = [], ""
     if file_type is not None:
         if file_type not in FILE_TYPES:
-            raise RecordError(f"type {file_type!r}: нужно одно из {', '.join(FILE_TYPES)}")
+            raise RecordError(f"type {file_type!r}: one of {', '.join(FILE_TYPES)} is required")
         media, ext = FILE_TYPES[file_type]
         exts = r"\.(" + "|".join(ext) + ")$"
         where.append("(lower(coalesce(o.media_type, '')) = ANY(%(media)s) "

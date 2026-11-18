@@ -345,7 +345,7 @@ def test_import_writes_only_for_person(start, kb):
     assert plan["changeset_id"] is None
     body = problem(model.post(f"{V1}/bundles/import", json={"upload_id": uploaded["upload_id"], "dry_run": False}),
                    403, "forbidden", "/bundles/import", "post")
-    assert "человек" in body["detail"]
+    assert "person" in body["detail"]
     # загрузка модели — её: человек её не видит
     problem(person.post(f"{V1}/bundles/import", json={"upload_id": uploaded["upload_id"]}), 404, "not_found",
             "/bundles/import", "post")

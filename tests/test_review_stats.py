@@ -73,7 +73,7 @@ def test_empty_base_gives_zeros_and_none(kb):
 
 
 def test_naive_now_is_rejected(kb):
-    with pytest.raises(review.ReviewError, match="часовым поясом"):
+    with pytest.raises(review.ReviewError, match="time zone"):
         review.stats(kb, now=datetime(2030, 1, 1))
 
 

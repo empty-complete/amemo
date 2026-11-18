@@ -950,7 +950,9 @@
       "related": "There are similar records",
       "basis_author_model": "Only a person sets the basis “author's statement”",
       "basis_without_rule": "A basis without a reference to the rule it rests on",
-      "confidence_person": "Only a model fills confidence"
+      "confidence_person": "Only a model fills confidence",
+      "private_removed": "What was hidden in <private>…</private> is cut out: it did not get into the record",
+      "secret_like": "Looks like a secret: the value is written as it is — if it is a secret, fix the record"
     }
   },
   "error": {

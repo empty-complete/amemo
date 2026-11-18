@@ -119,7 +119,7 @@ def _now() -> datetime:
 def check_target(target: str) -> None:
     """Вид записи — из закрытого набора: он подставляется в имена таблиц SQL."""
     if target not in PREFIX:
-        raise RecordError(f"неизвестный вид записи {target!r}: нужен atom или entity")
+        raise RecordError(f"unknown record target {target!r}: atom or entity is required")
 
 
 def as_uuid(value: uuid.UUID | str, what: str = "id") -> uuid.UUID:
@@ -129,12 +129,13 @@ def as_uuid(value: uuid.UUID | str, what: str = "id") -> uuid.UUID:
     try:
         return uuid.UUID(str(value))
     except ValueError as e:
-        raise RecordError(f"{what} {value!r}: это не UUID") from e
+        raise RecordError(f"{what} {value!r}: not a UUID") from e
 
 
 def _require_autocommit(conn: psycopg.Connection) -> None:
     if not conn.autocommit:
-        raise RecordError("нужно соединение с autocommit=True (db.connect): иначе запись не фиксируется")
+        raise RecordError("a connection with autocommit=True is required (db.connect): otherwise the write is not "
+                          "committed")
 
 
 def _ensure_agent(conn: psycopg.Connection, agent: str) -> None:
@@ -143,7 +144,7 @@ def _ensure_agent(conn: psycopg.Connection, agent: str) -> None:
 
 def _new_changeset(conn, *, agent, activity, reason, state, check_report, at) -> uuid.UUID:
     if activity is not None and conn.execute("SELECT 1 FROM activity WHERE id = %s", (activity,)).fetchone() is None:
-        raise RecordError(f"задачи (activity) {activity} нет")
+        raise RecordError(f"no such activity {activity}")
     cs = uuid7()
     conn.execute("INSERT INTO changeset (id, agent, activity, reason, state, check_report, created_at) "
                  "VALUES (%s, %s, %s, %s, %s, %s, %s)",
@@ -172,7 +173,7 @@ def _last_change_sql(target: Target) -> str:
 def _lock(conn, target: Target, record_id: uuid.UUID) -> datetime:
     """Заблокировать запись до конца транзакции; вернуть время её последнего изменения — новое не раньше его."""
     if conn.execute(f"SELECT 1 FROM {target} WHERE id = %s FOR NO KEY UPDATE", (record_id,)).fetchone() is None:
-        raise RecordError(f"{PREFIX[target]}:{record_id}: такой записи нет")
+        raise RecordError(f"{PREFIX[target]}:{record_id}: no such record")
     # отдельным запросом, после блокировки: он видит и то, что записал писатель, которого ждали
     return conn.execute(_last_change_sql(target), {"ids": [record_id]}).fetchone()[0]
 
@@ -188,7 +189,7 @@ def _lock_many(conn, pairs: Sequence[tuple[Target, uuid.UUID]]) -> datetime | No
                   for target, record_id in pairs]
     for (target, record_id), cur in zip(pairs, locked):
         if cur.fetchone() is None:
-            raise RecordError(f"{PREFIX[target]}:{record_id}: такой записи нет")
+            raise RecordError(f"{PREFIX[target]}:{record_id}: no such record")
     marks = []
     for target in PREFIX:
         chosen = [record_id for t, record_id in pairs if t == target]
@@ -207,7 +208,7 @@ def parse_ref(ref) -> tuple[Target, uuid.UUID | None, str | None]:
             return TARGET[prefix], uuid.UUID(rest), None
         if _KEY.fullmatch(rest):
             return TARGET[prefix], None, rest
-    raise RecordError(f"ref {ref!r}: нужна ссылка atm:<UUID или ключ> или ent:<UUID или ключ>")
+    raise RecordError(f"ref {ref!r}: a reference atm:<UUID or key> or ent:<UUID or key> is required")
 
 
 def resolve(conn: psycopg.Connection, ref: str) -> tuple[Target, uuid.UUID]:
@@ -217,11 +218,11 @@ def resolve(conn: psycopg.Connection, ref: str) -> tuple[Target, uuid.UUID]:
     target, record_id, key = parse_ref(ref)
     if record_id is not None:
         if conn.execute(f"SELECT 1 FROM {target} WHERE id = %s", (record_id,)).fetchone() is None:
-            raise RecordNotFound(f"{ref}: такой записи нет")
+            raise RecordNotFound(f"{ref}: no such record")
         return target, record_id
     row = conn.execute(f"SELECT id FROM {target} WHERE key = %s", (key,)).fetchone()
     if row is None:
-        raise RecordNotFound(f"{ref}: нет записи с ключом {key}")
+        raise RecordNotFound(f"{ref}: no record with the key {key}")
     return target, row[0]
 
 
@@ -231,12 +232,12 @@ def resolve_ref(conn: psycopg.Connection, ref: str, refs: dict[str, str]) -> str
     obj: — объект должен быть в базе (amemo/objects.py); версию и digest проверяет запись ревизии."""
     if ref.startswith("@"):
         if ref not in refs:
-            raise RecordError(f"{ref}: в пачке нет записи с таким ref")
+            raise RecordError(f"{ref}: the batch has no record with this ref")
         return refs[ref]
     prefix, rest = ref.split(":", 1)
     if prefix == "obj":
         if not UUID7.fullmatch(rest) or conn.execute("SELECT 1 FROM object WHERE id = %s", (rest,)).fetchone() is None:
-            raise RecordError(f"{ref}: такого объекта нет")
+            raise RecordError(f"{ref}: no such object")
         return ref
     target, record_id = resolve(conn, ref)
     return f"{PREFIX[target]}:{record_id}"
@@ -286,10 +287,10 @@ def _check_new_id(conn, target: Target, record_id: uuid.UUID, label: str) -> Non
     """Заданный id новой записи: UUIDv7, как у CHECK таблиц, и не id записи другого вида — ссылки atm:/ent:
     в подборке не должны указать не туда."""
     if not UUID7.fullmatch(str(record_id)):
-        raise RecordError(f"{label}: id новой записи — не UUIDv7")
+        raise RecordError(f"{label}: the id of a new record is not a UUIDv7")
     other = "entity" if target == "atom" else "atom"
     if conn.execute(f"SELECT 1 FROM {other} WHERE id = %s", (record_id,)).fetchone() is not None:
-        raise RecordError(f"{label}: id уже занят записью {PREFIX[other]}:{record_id}")
+        raise RecordError(f"{label}: the id is already taken by the record {PREFIX[other]}:{record_id}")
 
 
 def _insert_record(conn, item: Item, record_id: uuid.UUID, agent: str, at: datetime) -> None:
@@ -301,7 +302,8 @@ def _insert_record(conn, item: Item, record_id: uuid.UUID, agent: str, at: datet
                        (record_id, item.payload[kind_column], status, at, at))
     if cur.rowcount == 0:
         # только при keep_ids: запись с этим id создал соседний писатель после проверки — повтор её увидит
-        raise RecordError(f"{PREFIX[target]}:{record_id}: запись с этим id появилась одновременно — повторите пачку")
+        raise RecordError(f"{PREFIX[target]}:{record_id}: a record with this id appeared at the same time — send the "
+                          "batch again")
     _log_status(conn, target, record_id, status, agent, None, at)
 
 
@@ -314,9 +316,9 @@ def _prepare_body(conn, plan: _Planned, refs: dict) -> None:
     except (canon.CanonError, RecordError) as e:
         raise RecordError(f"{plan.label}: {e}") from e
     if body.get("valid_from") and body.get("valid_to") and body["valid_from"] > body["valid_to"]:
-        raise RecordError(f"{plan.label}: valid_from {body['valid_from']} позже valid_to {body['valid_to']}")
+        raise RecordError(f"{plan.label}: valid_from {body['valid_from']} is later than valid_to {body['valid_to']}")
     if target == "atom" and f"atm:{plan.record_id}" in body.get("derived_from", []):
-        raise RecordError(f"{plan.label}: derived_from: атом не может быть выведен из самого себя")
+        raise RecordError(f"{plan.label}: derived_from: an atom cannot be derived from itself")
     _check_sources(conn, body, plan.label)
     plan.body = body
 
@@ -329,10 +331,10 @@ def _check_sources(conn, body: dict, label: str) -> None:
         row = conn.execute("SELECT digest FROM object_version WHERE object_id = %s AND n = %s",
                            (object_id, n)).fetchone()
         if row is None:
-            raise RecordError(f"{label}: sources[{i}]: у объекта {source['object']} нет версии {n}")
+            raise RecordError(f"{label}: sources[{i}]: the object {source['object']} has no version {n}")
         if source.get("digest") != row[0]:
-            raise RecordError(f"{label}: sources[{i}]: digest {source.get('digest') or 'не указан'} не совпадает "
-                              f"с версией {n} объекта ({row[0] or 'без файла — digest не нужен'})")
+            raise RecordError(f"{label}: sources[{i}]: digest {source.get('digest') or 'not given'} does not match "
+                              f"version {n} of the object ({row[0] or 'no file — a digest is not needed'})")
 
 
 def _unchanged(conn, plan: _Planned) -> tuple[uuid.UUID, int] | None:
@@ -437,15 +439,15 @@ def _refresh(conn, target: Target, record_id: uuid.UUID) -> None:
         if body["entity_class"] == "edition" and body.get("edition_of"):
             edition_of = body["edition_of"].split(":", 1)[1]
             if edition_of == str(record_id):
-                raise RecordError("редакция не может быть редакцией самой себя")
+                raise RecordError("an edition cannot be an edition of itself")
             start, end = body.get("valid_from"), body.get("valid_to")
             valid = Range(date.fromisoformat(start), date.fromisoformat(end) if end else None, "[]") if start else None
             conn.execute("INSERT INTO edition (entity_id, edition_of, valid) VALUES (%s, %s, %s)",
                          (record_id, edition_of, valid))
     except psycopg.errors.UniqueViolation as e:
-        raise RecordError(f"ключ {body.get('key')!r} уже занят другой записью") from e
+        raise RecordError(f"the key {body.get('key')!r} is already taken by another record") from e
     except psycopg.errors.ExclusionViolation as e:
-        raise RecordError("срок действия пересекается с другой редакцией того же документа") from e
+        raise RecordError("the validity period overlaps another edition of the same document") from e
 
 
 def _log_status(conn, target, record_id, status, agent, reason, at) -> None:
@@ -476,17 +478,17 @@ def _plan_link(conn, payload: dict, refs: dict, label: str) -> _LinkPlan:
             src_kind, src = _node(resolve_ref(conn, payload["src"], refs))
             dst_kind, dst = _node(resolve_ref(conn, payload["dst"], refs))
         except RecordError as e:
-            raise RecordError(f"связь {rel}: {e}") from e
+            raise RecordError(f"link {rel}: {e}") from e
         concept = conn.execute("SELECT data FROM concept WHERE scheme = 'rel' AND code = %s", (rel,)).fetchone()
         if concept is None:
-            raise RecordError(f"неизвестный вид связи {rel!r}")
+            raise RecordError(f"unknown link type {rel!r}")
         if concept[0].get("via_field"):
-            raise RecordError(f"связь {rel} задаётся полем {concept[0]['via_field']} атома, а не связью")
+            raise RecordError(f"the link {rel} is set by the atom field {concept[0]['via_field']}, not by a link")
         pairs = concept[0].get("pairs", [])
         if f"{src_kind}>{dst_kind}" not in pairs:
-            raise RecordError(f"связь {rel}: {src_kind} → {dst_kind} не допускается (можно: {', '.join(pairs)})")
+            raise RecordError(f"link {rel}: {src_kind} → {dst_kind} is not allowed (allowed: {', '.join(pairs)})")
         if src == dst:
-            raise RecordError(f"связь {rel}: запись не может ссылаться на себя")
+            raise RecordError(f"link {rel}: a record cannot point to itself")
     except RecordError as e:
         raise RecordError(f"{label}: {e}") from e
     ends = [(src, dst)] + ([(dst, src)] if concept[0].get("symmetric") else [])
@@ -499,9 +501,9 @@ def _link_id(conn, payload: dict, keep_id: bool, label: str) -> uuid.UUID:
         return uuid7()
     link_id = as_uuid(payload["id"], f"{label}.id")
     if not UUID7.fullmatch(str(link_id)):
-        raise RecordError(f"{label}: id связи — не UUIDv7")
+        raise RecordError(f"{label}: the id of the link is not a UUIDv7")
     if conn.execute("SELECT 1 FROM link WHERE id = %s", (link_id,)).fetchone() is not None:
-        raise RecordError(f"{label}: id связи {link_id} уже занят")
+        raise RecordError(f"{label}: the link id {link_id} is already taken")
     return link_id
 
 
@@ -550,7 +552,7 @@ def commit(conn: psycopg.Connection, items: Sequence[Item], links: Sequence[dict
     только существующая запись, а id связи не читается."""
     _require_autocommit(conn)
     if not items and not links:
-        raise RecordError("пустая пачка")
+        raise RecordError("the batch is empty")
     refs: dict[str, str] = {}
     planned: list[_Planned] = []
     for i, item in enumerate(items):
@@ -562,24 +564,24 @@ def commit(conn: psycopg.Connection, items: Sequence[Item], links: Sequence[dict
             label = ref or f"{PREFIX[item.target]}:{record_id}"
             if conn.execute(f"SELECT 1 FROM {item.target} WHERE id = %s", (record_id,)).fetchone() is None:
                 if not keep_ids:
-                    raise RecordError(f"{label}: такой записи нет")
+                    raise RecordError(f"{label}: no such record")
                 _check_new_id(conn, item.target, record_id, label)
                 new = True
         else:
             record_id, label = uuid7(), ref or f"items[{i}]"
         if ref:
             if ref in refs:
-                raise RecordError(f"{ref}: два раза в одной пачке")
+                raise RecordError(f"{ref}: twice in one batch")
             refs[ref] = f"{PREFIX[item.target]}:{record_id}"
         scheme = "kind" if item.target == "atom" else "entity_class"
         code = item.payload.get(scheme)
         if code is not None and conn.execute("SELECT 1 FROM concept WHERE scheme = %s AND code = %s",
                                              (scheme, code)).fetchone() is None:
-            raise RecordError(f"{label}: {scheme} {code!r} — кода нет в загруженных пакетах")
+            raise RecordError(f"{label}: {scheme} {code!r}: the loaded packs have no such code")
         planned.append(_Planned(item, record_id, label, new))
     created = [p.record_id for p in planned if p.new]
     if len(set(created)) < len(created):
-        raise RecordError("новая запись с одним id два раза в одной пачке")
+        raise RecordError("a new record with the same id twice in one batch")
     with conn.transaction():
         _ensure_agent(conn, agent)
         existing = sorted({(p.item.target, p.record_id) for p in planned if not p.new},
@@ -619,7 +621,7 @@ def set_status_locked(conn, target: Target, record_id: uuid.UUID, status: str, *
     """Сменить статус записи, уже заблокированной в текущей транзакции; тот же статус — ничего не делает."""
     current = conn.execute(f"SELECT status FROM {target} WHERE id = %s", (record_id,)).fetchone()
     if current is None:
-        raise RecordError(f"{PREFIX[target]}:{record_id}: такой записи нет")
+        raise RecordError(f"{PREFIX[target]}:{record_id}: no such record")
     if current[0] == status:
         return
     conn.execute(f"UPDATE {target} SET status = %s, status_changed_at = %s WHERE id = %s", (status, at, record_id))
@@ -648,7 +650,7 @@ def decide(conn: psycopg.Connection, target: Target, revision_id: uuid.UUID, acc
         _ensure_agent(conn, agent)
         row = conn.execute(f"SELECT {target}_id FROM {target}_revision WHERE id = %s", (revision_id,)).fetchone()
         if row is None:
-            raise RecordError(f"ревизии {revision_id} нет")
+            raise RecordError(f"no revision {revision_id}")
         record_id = row[0]
         # как у писателей: проекция считается после чужой записи; решение не раньше записи, даже если часы ушли назад
         last = _lock(conn, target, record_id)
@@ -657,7 +659,7 @@ def decide(conn: psycopg.Connection, target: Target, revision_id: uuid.UUID, acc
             conn.execute(f"UPDATE {target}_revision SET review_state = %s, reviewed_by = %s, reviewed_at = %s "
                          "WHERE id = %s", ("accepted" if accept else "declined", agent, at, revision_id))
         except psycopg.errors.RaiseException as e:
-            raise RecordError(f"ревизия {revision_id} не ждёт проверки — решение по ней уже принято") from e
+            raise RecordError(f"the revision {revision_id} is not waiting for review — it is already decided") from e
         try:
             _refresh(conn, target, record_id)
             search.refresh_record(conn, target, record_id)
@@ -674,7 +676,7 @@ def retire_link(conn: psycopg.Connection, link_id: uuid.UUID, *, agent: str, rea
         row = conn.execute("SELECT created_at FROM link WHERE id = %s AND retired_at IS NULL FOR UPDATE",
                            (link_id,)).fetchone()
         if row is None:
-            raise RecordError(f"связи {link_id} нет или она уже выведена из оборота")
+            raise RecordError(f"no link {link_id}, or it is already retired")
         at = max(_now(), row[0])
         cs = _new_changeset(conn, agent=agent, activity=None, reason=reason, state="approved", check_report=None, at=at)
         conn.execute("UPDATE link SET retired_at = %s, retired_by = %s WHERE id = %s", (at, cs, link_id))

@@ -243,7 +243,7 @@ def test_rejected_batch_keeps_the_private_warning(start, kb):
     ({"proposals": [{"target": "atom", "payload": fact(label="а\x00б")}]}, "NUL"),
     ({"proposals": [{"target": "atom", "payload": {**fact(), "x\x00": 1}}]}, "NUL"),
     ({"proposals": [{"target": "atom", "payload": fact()}], "reason": "a\x00"}, "NUL"),
-    ({"proposals": [{"target": "atom", "payload": {"deep": json.loads("[" * 70 + "]" * 70)}}]}, "вложенность"),
+    ({"proposals": [{"target": "atom", "payload": {"deep": json.loads("[" * 70 + "]" * 70)}}]}, "nested deeper"),
 ])
 def test_submit_bad_bodies_are_400(start, kb, body, word):
     response = start().post(f"{V1}/submit", json=body)
@@ -359,7 +359,7 @@ def test_folder_structure_is_changed_only_by_the_person(start, kb):
             (client.post(f"{V1}/folders", json={"path": "Модель"}), "/folders", "post"),
             (client.delete(f"{V1}/folders/{quote('Ресурсы/Каталоги', safe='')}"), "/folders/{path}", "delete"),
             (client.patch(f"{V1}/folders/Ресурсы", json={"path": "Ресурсы2"}), "/folders/{path}", "patch")):
-        assert "только человек" in problem(response, 403, "forbidden", path, method)["detail"]
+        assert "only a person" in problem(response, 403, "forbidden", path, method)["detail"]
     assert kb.execute("SELECT count(*) FROM folder WHERE path IN ('Модель', 'Ресурсы2')").fetchone()[0] == 0
     assert kb.execute("SELECT count(*) FROM folder WHERE path = 'Ресурсы/Каталоги'").fetchone()[0] == 1
     with pytest.raises(api.Forbidden):                  # операция напрямую — тот же отказ (MCP, CLI)
@@ -869,7 +869,7 @@ def test_model_moves_records_only_into_existing_folders(start, kb, store, docs):
     model = start()
     body = problem(model.patch(f"{V1}/records/{ref}/folder", json={"folder": "model/made/this"}), 404,
                    "folder_not_found", "/records/{ref}/folder", "patch")
-    assert "человек" in body["detail"]
+    assert "person" in body["detail"]
     assert kb.execute("SELECT count(*) FROM folder").fetchone()[0] == before
     assert kb.execute("SELECT folder FROM atom WHERE id = %s", (result.records[0]["record_id"],)).fetchone()[0] is None
     problem(model.patch(f"{V1}/records/{ref}/folder", json={"folder": "a/../b"}), 422, "folder_invalid",

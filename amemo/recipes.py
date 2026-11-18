@@ -35,7 +35,7 @@ def _check_query_provider(model, provider: embed.EmbeddingProvider) -> None:
               getattr(provider, "backend", None), getattr(provider, "dims", None))
     if actual != expected:
         raise embed.EmbeddingError(
-            f"provider не соответствует активной модели: ожидалось {expected!r}, получено {actual!r}")
+            f"the provider does not match the active model: expected {expected!r}, got {actual!r}")
 
 
 def availability(conn: psycopg.Connection, provider: embed.EmbeddingProvider | None = None) -> dict:
@@ -66,7 +66,7 @@ SEMANTIC_ERRORS = ("raise", "skip")
 def _select(conn: psycopg.Connection, provider, on_error: str):
     """_availability с выбором реакции на ошибку provider: raise — EmbeddingError наружу, skip — причина пропуска."""
     if on_error not in SEMANTIC_ERRORS:
-        raise ValueError(f"on_semantic_error {on_error!r}: допустимы {', '.join(SEMANTIC_ERRORS)}")
+        raise ValueError(f"on_semantic_error {on_error!r}: allowed are {', '.join(SEMANTIC_ERRORS)}")
     try:
         return _availability(conn, provider)
     except embed.EmbeddingError:
@@ -135,7 +135,7 @@ def _response(conn: psycopg.Connection, recipe: str, channels: dict, *, query: s
 
 def _history_moment(value, name: str):
     if value is not None and (not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None):
-        raise records.RecordError(f"{name} {value!r}: нужно время с часовым поясом (datetime с tzinfo)")
+        raise records.RecordError(f"{name} {value!r}: a time with a time zone is required (a datetime with tzinfo)")
     return value
 
 
@@ -205,7 +205,7 @@ def _history_limit(limit) -> int | None:
     if limit is None:
         return None
     if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
-        raise records.RecordError(f"limit {limit!r}: нужно целое число от 1 или None")
+        raise records.RecordError(f"limit {limit!r}: an integer from 1 or None is required")
     return limit
 
 
@@ -228,9 +228,9 @@ def what_changed(conn: psycopg.Connection, *, ref: str | None = None,
     since = _history_moment(since, "since")
     until = _history_moment(until, "until")
     if since is not None and until is not None and since >= until:
-        raise records.RecordError("since должен быть строго раньше until")
+        raise records.RecordError("since must be strictly earlier than until")
     if not isinstance(who, str) or who not in WHO:
-        raise records.RecordError(f"who {who!r}: допустимы {', '.join(WHO)}")
+        raise records.RecordError(f"who {who!r}: allowed are {', '.join(WHO)}")
     limit = _history_limit(limit)
     target, record_id, normalized_ref = _history_ref(conn, ref)
     params = {"since": since, "until": until, "record_id": record_id, "target": target, "limit": limit,
@@ -388,11 +388,11 @@ def _source_document(conn: psycopg.Connection, ref: str):
         f"WHERE rec.id = %(record_id)s",
         {"target": target, "record_id": record_id}).fetchone()
     if row is None:
-        raise records.RecordNotFound(f"{ref}: такой записи нет")
+        raise records.RecordNotFound(f"{ref}: no such record")
     if row[1] is None:
-        raise records.RecordError(f"{ref}: у записи нет текущей ревизии")
+        raise records.RecordError(f"{ref}: the record has no current revision")
     if row[2] is None:
-        raise records.RecordError(f"{ref}: нет поискового документа текущей ревизии")
+        raise records.RecordError(f"{ref}: no search document of the current revision")
     return target, record_id, row[2]
 
 
@@ -405,7 +405,7 @@ def similar(conn: psycopg.Connection, query: str, *, agent: str, activity=None,
 
     Фильтры, log, on_semantic_error и lang — как у exact_fact: при skip похожие по тексту ищет один канал fts."""
     if not isinstance(query, str):
-        raise ValueError("запрос должен быть строкой")
+        raise ValueError("the query must be a string")
     kind, entity_class = search._codes(kind, "kind"), search._codes(entity_class, "entity_class")
     source = None
     fts_query = query
@@ -481,17 +481,17 @@ def _graph_rels(conn: psycopg.Connection, rels) -> frozenset[str] | None:
     if rels is None:
         return None
     if isinstance(rels, str) or not hasattr(rels, "__iter__"):
-        raise records.RecordError("rels должен быть набором видов связей, не строкой")
+        raise records.RecordError("rels must be a set of link types, not a string")
     items = list(rels)
     if not all(isinstance(value, str) for value in items):
-        raise records.RecordError("rels: виды связей — строки-коды")
+        raise records.RecordError("rels: link types are code strings")
     values = frozenset(items)
     if not values:
-        raise records.RecordError("rels: пустой набор видов связей")
+        raise records.RecordError("rels: an empty set of link types")
     known = {row[0] for row in conn.execute("SELECT code FROM concept WHERE scheme = 'rel'")}
     unknown = values - known
     if unknown:
-        raise records.RecordError(f"rels: неизвестные виды связей {', '.join(sorted(unknown))}")
+        raise records.RecordError(f"rels: unknown link types {', '.join(sorted(unknown))}")
     return values
 
 
@@ -665,15 +665,15 @@ def around_entity(conn: psycopg.Connection, ref: str, *, depth: int = 1, rels=No
     total — сколько узлов было бы без предела: за пределом обход досчитывает только ссылки соседей, без путей.
     У узла degree — число его текущих связей во всей базе, pending — открытый пункт очереди проверки."""
     if isinstance(depth, bool) or not isinstance(depth, int) or not 1 <= depth <= 3:
-        raise records.RecordError("depth должен быть целым числом от 1 до 3")
+        raise records.RecordError("depth must be an integer from 1 to 3")
     if limit is not None and (isinstance(limit, bool) or not isinstance(limit, int) or limit < 1):
-        raise records.RecordError(f"limit {limit!r}: нужно целое число от 1 или None")
+        raise records.RecordError(f"limit {limit!r}: an integer from 1 or None is required")
     _, _, start = _history_ref(conn, ref)
     allowed_statuses = search._channel_statuses(statuses)
     rels = _graph_rels(conn, rels)
     nodes = _graph_node_rows(conn, [start])
     if start not in nodes:
-        raise records.RecordError(f"{start}: у записи нет текущей ревизии")
+        raise records.RecordError(f"{start}: the record has no current revision")
     nodes[start]["depth"] = 0
     paths = {start: {"nodes": [start], "edges": []}}
     result_edges = []
@@ -844,16 +844,16 @@ def overview(conn: psycopg.Connection, *, limit: int | None = GRAPH_LIMIT, proje
     Отбор — один запрос: степень агрегатом по всем рёбрам, номер по degree и total — оконными функциями, соседи
     хабов — по индексам рёбер, предел — в базе; в Python приходят только вернувшиеся узлы."""
     if limit is not None and (isinstance(limit, bool) or not isinstance(limit, int) or limit < 1):
-        raise records.RecordError(f"limit {limit!r}: нужно целое число от 1 или None")
+        raise records.RecordError(f"limit {limit!r}: an integer from 1 or None is required")
     allowed_statuses = search._channel_statuses(statuses)
     rels = _graph_rels(conn, rels)
     project_ref = None
     if project is not None:
         if not isinstance(project, str):
-            raise records.RecordError("project должен быть ссылкой ent:<UUID или ключ>")
+            raise records.RecordError("project must be a reference ent:<UUID or key>")
         target, _, project_ref = _history_ref(conn, project)
         if target != "entity":
-            raise records.RecordError(f"project {project}: нужна сущность ent:, а не атом")
+            raise records.RecordError(f"project {project}: an entity ent: is required, not an atom")
     tags = sorted({unicodedata.normalize("NFC", t) for t in (tags or ()) if isinstance(t, str) and t})
     kinds = sorted({k for k in (kinds or ()) if isinstance(k, str) and k})
     folder = folder or None

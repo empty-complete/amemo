@@ -113,7 +113,7 @@ def test_pack_twice_is_rejected(tmp_path):
 def test_core_kind_accepted_foreign_rejected(pg):
     db.prepare(pg)
     _commit_atom(pg, "fact")                                   # код ядра принимается
-    with pytest.raises(records.RecordError, match="кода нет в загруженных пакетах"):
+    with pytest.raises(records.RecordError, match="the loaded packs have no such code"):
         _commit_atom(pg, "no_such_kind")
     # и на уровне базы — внешний ключ, без приложения
     with pytest.raises(psycopg.errors.ForeignKeyViolation):
@@ -131,7 +131,7 @@ def test_example_pack_adds_codes_and_template(pg, monkeypatch, tmp_path):
     assert origin == "example"
     assert pg.execute("SELECT 1 FROM template WHERE code = 'idea' AND version = '1.0.0'").fetchone()
     # чужой код и с пакетом-примером не проходит
-    with pytest.raises(records.RecordError, match="кода нет в загруженных пакетах"):
+    with pytest.raises(records.RecordError, match="the loaded packs have no such code"):
         _commit_atom(pg, "norm")
 
 

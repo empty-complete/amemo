@@ -59,7 +59,7 @@ class MineError(ValueError):
 
 def _person(agent: str, what: str) -> None:
     if not isinstance(agent, str) or not agent.startswith("person:"):
-        raise MineError(f"свои виды {what} только человек (person:), а не {agent}", code="forbidden")
+        raise MineError(f"only a person (person:) {what} own kinds, not {agent}", code="forbidden")
 
 
 def _version(text: str) -> tuple[int, ...]:
@@ -80,19 +80,19 @@ def _lang(value, path: str, issues: list, code: str, *, required: bool) -> dict 
     можно). Пустые слоты отбрасываются."""
     if value is None:
         if required:
-            issues.append(_issue(code, path, "нужна подпись: ru или en"))
+            issues.append(_issue(code, path, "a label is required: ru or en"))
         return None
     if not isinstance(value, dict) or set(value) - set(lang.LANGS):
-        issues.append(_issue(code, path, "ожидается {ru, en}"))
+        issues.append(_issue(code, path, "{ru, en} is expected"))
         return None
     for slot in lang.LANGS:
         if value.get(slot) is not None and not isinstance(value[slot], str):
-            issues.append(_issue(code, f"{path}.{slot}", "ожидается строка"))
+            issues.append(_issue(code, f"{path}.{slot}", "a string is expected"))
             return None
     texts = {slot: text.strip() for slot, text in lang.texts(value)}
     if not texts:
         if required or value:
-            issues.append(_issue(code, path, "нужен текст хотя бы на одном языке: ru или en"))
+            issues.append(_issue(code, path, "a text in at least one language is required: ru or en"))
         return None
     return texts
 
@@ -101,60 +101,62 @@ def _field(code: str, target: str, i: int, f, issues: list, properties: set[str]
     """Поле формы черновика → [(путь, правило или {}, запись ui.fields)]; у периода — два пути."""
     at = f"form[{i}]"
     if not isinstance(f, dict):
-        issues.append(_issue(code, at, "ожидается объект FormField"))
+        issues.append(_issue(code, at, "a FormField object is expected"))
         return []
     if extra := sorted(set(f) - FIELD_KEYS):
-        issues.append(_issue(code, at, f"лишние поля: {', '.join(extra)}"))
+        issues.append(_issue(code, at, f"extra fields: {', '.join(extra)}"))
     path, ftype, required = f.get("path"), f.get("type"), f.get("required", False)
     label = _lang(f.get("label"), f"{at}.label", issues, code, required=True)
     hint = _lang(f.get("hint"), f"{at}.hint", issues, code, required=False)
     if ftype not in FIELD_TYPES:
-        issues.append(_issue(code, f"{at}.type", f"тип {ftype!r}: ожидается один из {', '.join(FIELD_TYPES)}"))
+        issues.append(_issue(code, f"{at}.type", f"type {ftype!r}: one of {', '.join(FIELD_TYPES)} is expected"))
         return []
     if not isinstance(required, bool):
-        issues.append(_issue(code, f"{at}.required", "ожидается true или false"))
+        issues.append(_issue(code, f"{at}.required", "true or false is expected"))
         return []
     if not isinstance(path, str) or not path:
-        issues.append(_issue(code, f"{at}.path", "нужен путь поля в теле записи"))
+        issues.append(_issue(code, f"{at}.path", "the path of a field in the record body is required"))
         return []
     ui = {"path": path, "type": ftype, **({"label": label} if label else {}), **({"hint": hint} if hint else {})}
     prop = packs.UI_PROPERTY.fullmatch(path)
     if prop is not None:
         if target != "atom":
-            issues.append(_issue(code, f"{at}.path", "величины есть только у тела атома"))
+            issues.append(_issue(code, f"{at}.path", "only the body of an atom has properties"))
             return []
         if prop.group(2) not in properties:
             # своё текстовое свойство (qualifiers) заводится вместе с видом; величина с единицей — только из словаря
             if prop.group(1) != "qualifiers" or ftype != "text":
-                issues.append(_issue(code, f"{at}.path", f"величины {prop.group(2)} нет в словаре property"))
+                issues.append(_issue(code, f"{at}.path", f"the property {prop.group(2)} is not in the property "
+                                                         "vocabulary"))
                 return []
             if not CODE.fullmatch(prop.group(2)):
-                issues.append(_issue(code, f"{at}.path", f"код свойства {prop.group(2)}: латиница, цифры и _, "
-                                                         "с буквы, 2–64 знака"))
+                issues.append(_issue(code, f"{at}.path", f"property code {prop.group(2)}: Latin letters, digits and _, "
+                                                         "starting with a letter, 2–64 characters"))
                 return []
         if f.get("property") not in (None, prop.group(2)):
-            issues.append(_issue(code, f"{at}.property", f"путь называет величину {prop.group(2)}, "
-                                                         f"а не {f.get('property')}"))
+            issues.append(_issue(code, f"{at}.property", f"the path names the property {prop.group(2)}, "
+                                                         f"not {f.get('property')}"))
             return []
         # обязательность величины — в ui: общее правило content.values просит лишь хотя бы одно значение
         return [(path, {"path": prop.group(1), "required": required}, {**ui, "required": required})]
     if ftype == "period":
         if path not in (*PERIOD, "valid"):
-            issues.append(_issue(code, f"{at}.path", "период задаётся путём valid_from"))
+            issues.append(_issue(code, f"{at}.path", "a period is set by the path valid_from"))
             return []
         ui["path"] = "valid_from"
         first = {"path": "valid_from", **({"required": True} if required else {})}
         return [("valid_from", first, ui), ("valid_to", {"path": "valid_to"}, {})]
     if path not in packs.UI_BASE[target] and forms.form_slot(path, target) is None:
-        issues.append(_issue(code, f"{at}.path", f"{path} — не поле формы {target}: ожидается поле тела записи "
-                                                 "верхнего уровня, которое заполняет человек, или величина"))
+        issues.append(_issue(code, f"{at}.path", f"{path} is not a form field of {target}: a top-level field of the "
+                                                 "record body "
+                                                 "that a person fills in, or a property, is expected"))
         return []
     rule: dict = {"path": path, **({"required": True} if required else {})}
     accepts = f.get("accepts") if isinstance(f.get("accepts"), dict) else {}
     classes = accepts.get("entity_classes") or []
     if ftype in ("object", "record") and classes:
         if not isinstance(classes, list) or not all(isinstance(c, str) for c in classes):
-            issues.append(_issue(code, f"{at}.accepts.entity_classes", "ожидается список кодов"))
+            issues.append(_issue(code, f"{at}.accepts.entity_classes", "a list of codes is expected"))
             return []
         rule["entity_classes"] = list(classes)
     if path in packs.UI_BASE[target] and len(rule) == 1:
@@ -165,21 +167,23 @@ def _field(code: str, target: str, i: int, f, issues: list, properties: set[str]
 def build(conn: psycopg.Connection, code: str, draft, *, version: str = "1.0.0") -> tuple[Concept, Template]:
     """Понятие вида и шаблон из черновика; ошибки черновика — MineError(invalid) со всеми замечаниями."""
     if not isinstance(code, str) or not CODE.fullmatch(code):
-        raise MineError(f"код вида {code!r}: ожидается [a-z][a-z0-9_]{{1,63}}", code="invalid",
-                        issues=[_issue(str(code), "code", "код вида: латиница, цифры и _, с буквы, 2–64 знака")])
+        raise MineError(f"kind code {code!r}: [a-z][a-z0-9_]{{1,63}} is expected", code="invalid",
+                        issues=[_issue(str(code), "code", "kind code: Latin letters, digits and _, starting with a "
+                                                          "letter, 2–64 characters")])
     if not isinstance(draft, dict):
-        raise MineError("черновик вида: ожидается объект TemplateDraft", code="invalid",
-                        issues=[_issue(code, "", "ожидается объект TemplateDraft")])
+        raise MineError("kind draft: a TemplateDraft object is expected", code="invalid",
+                        issues=[_issue(code, "", "a TemplateDraft object is expected")])
     issues: list[dict] = []
     if extra := sorted(set(draft) - DRAFT_KEYS):
-        issues.append(_issue(code, "", f"лишние поля: {', '.join(extra)}"))
+        issues.append(_issue(code, "", f"extra fields: {', '.join(extra)}"))
     target = draft.get("target")
     if target not in SCHEMES:
-        issues.append(_issue(code, "target", "target: atom или entity"))
+        issues.append(_issue(code, "target", "target: atom or entity"))
         target = None
     family = draft.get("family")
     if target and family not in FAMILIES[target]:
-        issues.append(_issue(code, "family", f"семья вида {target}: {' или '.join(FAMILIES[target])}, а не {family!r}"))
+        issues.append(_issue(code, "family", f"the family of a {target} kind: {' or '.join(FAMILIES[target])}, not "
+                                             f"{family!r}"))
     label = _lang(draft.get("label"), "label", issues, code, required=True)
     description = _lang(draft.get("description"), "description", issues, code, required=False)
     body = draft.get("body")
@@ -187,10 +191,10 @@ def build(conn: psycopg.Connection, code: str, draft, *, version: str = "1.0.0")
         issues.append(_issue(code, "body", f"body: {', '.join(BODIES)}"))
     widgets = draft.get("widgets")
     if not isinstance(widgets, list) or not all(w in WIDGETS for w in widgets) or len(set(widgets)) != len(widgets):
-        issues.append(_issue(code, "widgets", f"widgets: список без повторов из {', '.join(WIDGETS)}"))
+        issues.append(_issue(code, "widgets", f"widgets: a list without repeats from {', '.join(WIDGETS)}"))
     form = draft.get("form")
     if not isinstance(form, list):
-        issues.append(_issue(code, "form", "form: ожидается список полей"))
+        issues.append(_issue(code, "form", "form: a list of fields is expected"))
         form = []
     properties = {c for (c,) in conn.execute("SELECT code FROM concept WHERE scheme = 'property'").fetchall()}
     rules: dict[str, dict] = {}
@@ -199,7 +203,7 @@ def build(conn: psycopg.Connection, code: str, draft, *, version: str = "1.0.0")
     for i, f in enumerate(form if target else []):
         for path, rule, ui in _field(code, target, i, f, issues, properties):
             if path in seen:
-                issues.append(_issue(code, f"form[{i}].path", f"путь {path} уже есть в форме"))
+                issues.append(_issue(code, f"form[{i}].path", f"the path {path} is already in the form"))
                 continue
             seen.add(path)
             if ui:
@@ -212,7 +216,7 @@ def build(conn: psycopg.Connection, code: str, draft, *, version: str = "1.0.0")
             else:
                 rules[rule["path"]] = dict(rule)
     if issues:
-        raise MineError(f"вид {code}: черновик не прошёл проверку ({len(issues)})", code="invalid", issues=issues)
+        raise MineError(f"kind {code}: the draft did not pass the check ({len(issues)})", code="invalid", issues=issues)
     fields = [{k: v for k, v in r.items() if not (k == "required" and v is False)} for r in rules.values()]
     template = {"code": code, "version": version, "target": target, "applies_to": code,
                 **({"description": description} if description else {}),
@@ -225,7 +229,7 @@ def build(conn: psycopg.Connection, code: str, draft, *, version: str = "1.0.0")
         return (Concept.model_validate_json(json.dumps(concept, ensure_ascii=False), strict=True),
                 Template.model_validate_json(json.dumps(template, ensure_ascii=False), strict=True))
     except ValueError as e:
-        raise MineError(f"вид {code}: {e}", code="invalid", issues=[_issue(code, "", str(e))]) from e
+        raise MineError(f"kind {code}: {e}", code="invalid", issues=[_issue(code, "", str(e))]) from e
 
 
 # --- пакет mine из базы ---
@@ -373,13 +377,14 @@ def _save(conn: psycopg.Connection, concept: Concept, template: Template, loaded
     if owner is None and row is not None:
         owner = row[0]
     if owner is not None:
-        raise MineError(f"код {code} уже занят видом пакета {owner}", code="exists")
+        raise MineError(f"the code {code} is already taken by a kind of the pack {owner}", code="exists")
     other = conn.execute("SELECT scheme FROM concept WHERE code = %s AND origin = %s AND scheme <> %s "
                          "AND scheme IN ('kind', 'entity_class')", (code, NAME, concept.scheme)).fetchone()
     if other is not None:
-        raise MineError(f"вид {code} уже есть для {TARGETS[other[0]]}: target не меняется — удалите вид и "
-                        f"создайте заново", code="invalid",
-                        issues=[_issue(code, "target", f"вид {code} — {TARGETS[other[0]]}")])
+        raise MineError(f"the kind {code} already exists for {TARGETS[other[0]]}: target does not change — delete the "
+                        "kind and "
+                        f"create it again", code="invalid",
+                        issues=[_issue(code, "target", f"the kind {code} is {TARGETS[other[0]]}")])
     concepts = _concepts(conn)
     active = _active(conn)
     body = template.model_dump(mode="json", exclude_none=True)
@@ -398,7 +403,7 @@ def _save(conn: psycopg.Connection, concept: Concept, template: Template, loaded
         _check(loaded, _pack_version(conn),
                [*(c for k, c in concepts.items() if k != code), concept, *_props(conn), *props], bodies)
     except packs.PackError as e:
-        raise MineError(f"вид {code}: {e}", code="invalid", issues=[_issue(code, "", str(e))]) from e
+        raise MineError(f"kind {code}: {e}", code="invalid", issues=[_issue(code, "", str(e))]) from e
     now = datetime.now(timezone.utc)
     for prop in props:
         db._upsert_concept(conn, prop, NAME, now)
@@ -436,7 +441,7 @@ def put(conn: psycopg.Connection, code: str, draft, *, agent: str) -> dict:
     подписями и подсказками по умолчанию (из словаря property), и пересохранение без правок не должно поднимать
     версию."""
     db.require_autocommit(conn)
-    _person(agent, "правит")
+    _person(agent, "edits")
     concept, template = build(conn, code, draft)
     loaded = packs.load_packs()
     with conn.transaction():
@@ -457,20 +462,21 @@ def _pack_kinds(pack: packs.Pack) -> list[tuple[Concept, Template]]:
     kinds = []
     for t in pack.templates:
         c = concepts.pop(t.code, None)
-        where = f"пакет {pack.name}: шаблон {t.code}"
+        where = f"pack {pack.name}: template {t.code}"
         if c is None or c.scheme != SCHEMES.get(t.target):
-            raise MineError(f"{where}: нет понятия вида {SCHEMES.get(t.target, '?')}.{t.code}", code="invalid")
+            raise MineError(f"{where}: no kind concept {SCHEMES.get(t.target, '?')}.{t.code}", code="invalid")
         if not CODE.fullmatch(t.code) or t.applies_to != t.code:
-            raise MineError(f"{where}: код своего вида — [a-z][a-z0-9_]{{1,63}}, applies_to — тот же код",
+            raise MineError(f"{where}: the code of an own kind is [a-z][a-z0-9_]{{1,63}}, applies_to is the same code",
                             code="invalid")
         family = getattr(c.family, "value", c.family)
         if family not in (FAMILIES["atom"] if t.target == "atom" else (None,)):
-            raise MineError(f"{where}: семья вида {c.family!r} не по правилам {t.target}", code="invalid")
+            raise MineError(f"{where}: the kind family {c.family!r} does not fit the rules of {t.target}",
+                            code="invalid")
         kinds.append((c, t))
     # свойства своих видов (vocab/property.yaml) едут без шаблона: _save заводит их по полям шаблона
     loose = sorted(code for code, c in concepts.items() if c.scheme != "property")
     if loose:
-        raise MineError(f"пакет {pack.name}: понятия без шаблона: {', '.join(loose)}", code="invalid")
+        raise MineError(f"pack {pack.name}: concepts without a template: {', '.join(loose)}", code="invalid")
     return sorted(kinds, key=lambda k: (k[0].scheme != "entity_class", k[0].code))
 
 
@@ -479,9 +485,9 @@ def read_pack(folder: Path) -> list[tuple[Concept, Template]]:
     try:
         pack = packs.load_pack(folder)
     except packs.PackError as e:
-        raise MineError(f"пакет «Мои виды»: {e}", code="invalid") from e
+        raise MineError(f"the pack of own kinds (packs/mine): {e}", code="invalid") from e
     if pack.name != NAME:
-        raise MineError(f"пакет «Мои виды»: имя {pack.name}, а не {NAME}", code="invalid")
+        raise MineError(f"the pack of own kinds (packs/mine): the name is {pack.name}, not {NAME}", code="invalid")
     return _pack_kinds(pack)
 
 
@@ -519,8 +525,8 @@ def compare(conn: psycopg.Connection, kinds: list[tuple[Concept, Template]]) -> 
     new, collisions = [], []
     for c, t in kinds:
         if c.code in taken or (c.code in tpls and c.code not in active):
-            owner = f"видом пакета {taken[c.code]}" if c.code in taken else "шаблоном пакета"
-            collisions.append(f"packs/mine: код своего вида {c.code} уже занят {owner}")
+            owner = f"a kind of the pack {taken[c.code]}" if c.code in taken else "a template of a pack"
+            collisions.append(f"packs/mine: the code of the own kind {c.code} is already taken by {owner}")
             continue
         if c.code not in concepts:
             new.append(c.code)
@@ -528,7 +534,7 @@ def compare(conn: psycopg.Connection, kinds: list[tuple[Concept, Template]]) -> 
         body = t.model_dump(mode="json", exclude_none=True)
         if (concepts[c.code].model_dump(mode="json", exclude_none=True) != c.model_dump(mode="json", exclude_none=True)
                 or {**active.get(c.code, {}), "version": ""} != {**body, "version": ""}):
-            collisions.append(f"packs/mine: свой вид {c.code} в базе другой — переименуйте один из них")
+            collisions.append(f"packs/mine: the own kind {c.code} differs in the base — rename one of them")
     return new, collisions
 
 
@@ -539,7 +545,7 @@ def adopt(conn: psycopg.Connection, kinds: list[tuple[Concept, Template]], *, ag
     импорт пробует виды в транзакции, которую откатывает (dry_run — без проверки, что вливает человек)."""
     db.require_autocommit(conn)
     if not dry_run:
-        _person(agent, "добавляет")
+        _person(agent, "adds")
     loaded = packs.load_packs()
     added = []
     with conn.transaction():
@@ -558,29 +564,29 @@ def delete(conn: psycopg.Connection, code: str, *, agent: str) -> None:
     """Удалить свой вид: есть записи этого вида (любого статуса) — MineError(in_use); иначе шаблон уходит из
     template_active, понятие удаляется, пакет mine получает новую версию. Старые версии шаблона остаются."""
     db.require_autocommit(conn)
-    _person(agent, "удаляет")
+    _person(agent, "deletes")
     loaded = packs.load_packs()
     with conn.transaction():
         conn.execute("SELECT pg_advisory_xact_lock(%s)", (db.MINE_LOCK,))
         concepts = _concepts(conn)
         if code not in concepts:
-            raise MineError(f"своего вида {code} нет", code="not_found")
+            raise MineError(f"no own kind {code}", code="not_found")
         scheme = concepts[code].scheme
         table, column = ("atom", "kind") if scheme == "kind" else ("entity", "entity_class")
         n = conn.execute(f"SELECT count(*) FROM {table} WHERE {column} = %s", (code,)).fetchone()[0]
         if n:
-            raise MineError(f"у вида {code} есть записи: {n} — сначала смените им вид", code="in_use")
+            raise MineError(f"the kind {code} has records: {n} — change their kind first", code="in_use")
         bodies = [b for c, b in _active(conn).items() if c != code]
         try:
             _check(loaded, _pack_version(conn), [*(c for k, c in concepts.items() if k != code), *_props(conn)],
                    bodies)
         except packs.PackError as e:
-            raise MineError(f"на вид {code} ссылается другой свой вид: {e}", code="in_use") from e
+            raise MineError(f"another own kind refers to the kind {code}: {e}", code="in_use") from e
         conn.execute("DELETE FROM template_active WHERE code = %s", (code,))
         try:
             conn.execute("DELETE FROM concept WHERE scheme = %s AND code = %s", (scheme, code))
         except psycopg.errors.ForeignKeyViolation as e:
             # запись вида появилась после подсчёта (submit не берёт MINE_LOCK): то же, что записи были
-            raise MineError(f"у вида {code} появились записи — сначала смените им вид", code="in_use") from e
+            raise MineError(f"the kind {code} got records — change their kind first", code="in_use") from e
         _gc_props(conn)                   # свойства, которые были только у этого вида
         _bump(conn, datetime.now(timezone.utc))

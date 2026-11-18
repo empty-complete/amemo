@@ -142,7 +142,7 @@ def test_declined_revision_never_becomes_current(kb):
                      agent=AGENT)
     decide(kb, "atom", pending.revisions[0].revision_id, accept=False, agent=HUMAN)
     assert lookup.get(kb, "atom", record_id)["revision"] == 1
-    with pytest.raises(RecordError, match="решение по ней уже принято"):
+    with pytest.raises(RecordError, match="it is already decided"):
         decide(kb, "atom", pending.revisions[0].revision_id, accept=True, agent=HUMAN)
 
 
@@ -186,20 +186,20 @@ def test_editions_in_force_on_date(kb):
 def test_overlapping_edition_rejected_whole_bundle(kb):
     base(kb)
     count = kb.execute("SELECT count(*) FROM changeset").fetchone()[0]
-    with pytest.raises(RecordError, match="пересекается"):
+    with pytest.raises(RecordError, match="overlaps"):
         commit(kb, [Item("entity", edition("@sp20_x", "sp20_13330_x", "2017-01-01", of="ent:sp20_13330"))],
                agent=AGENT)
     assert kb.execute("SELECT count(*) FROM changeset").fetchone()[0] == count      # пачка не записана
 
 
 @pytest.mark.parametrize("items, message", [
-    (lambda: [Item("entity", sp20()), Item("entity", sp20(ref="@other"))], "ключ 'sp20_13330' уже занят"),
-    (lambda: [Item("atom", fact(about=["ent:no_such_key"], sources=[]))], "нет записи с ключом no_such_key"),
-    (lambda: [Item("atom", fact(about=["@nobody"], sources=[]))], "@nobody: в пачке нет записи"),
-    (lambda: [Item("entity", sp20()), Item("entity", sp20(key="other"))], "@sp20: два раза в одной пачке"),
+    (lambda: [Item("entity", sp20()), Item("entity", sp20(ref="@other"))], "the key 'sp20_13330' is already taken"),
+    (lambda: [Item("atom", fact(about=["ent:no_such_key"], sources=[]))], "no record with the key no_such_key"),
+    (lambda: [Item("atom", fact(about=["@nobody"], sources=[]))], "@nobody: the batch has no record"),
+    (lambda: [Item("entity", sp20()), Item("entity", sp20(key="other"))], "@sp20: twice in one batch"),
     (lambda: [Item("atom", {**fact(ref="@a", sources=[]), "about": ["@b"]}),
               Item("atom", fact(ref="@b", key="b", sources=[], about=[]))], "нужна ent:"),
-    (lambda: [], "пустая пачка"),
+    (lambda: [], "the batch is empty"),
 ], ids=["ключ занят", "нет ключа", "нет @имени", "@имя дважды", "about на атом из пачки", "пустая пачка"])
 def test_bad_bundles_rejected(kb, items, message):
     with pytest.raises(RecordError, match=message):
@@ -217,13 +217,13 @@ def test_links_written_once_checked_and_retired(kb):
                    agent=AGENT).refs["@w0b"]
     a = commit(kb, [], [{"rel": "contradicts", "src": w0, "dst": other}], agent=AGENT).links[0]
     assert commit(kb, [], [{"rel": "contradicts", "src": other, "dst": w0}], agent=AGENT).links[0] == a   # симметрична
-    with pytest.raises(RecordError, match="refines: atom → entity не допускается"):
+    with pytest.raises(RecordError, match="refines: atom → entity is not allowed"):
         commit(kb, [], [{"rel": "refines", "src": w0, "dst": sp20_ref}], agent=AGENT)
     before = datetime.now(timezone.utc)
     retire_link(kb, first, agent=HUMAN, reason="дубль связи about")
     assert [l["rel"] for l in lookup.links(kb, w0.split(":", 1)[1])] == ["contradicts"]
     assert {l["rel"] for l in lookup.links(kb, w0.split(":", 1)[1], at=before)} == {"depends_on", "contradicts"}
-    with pytest.raises(RecordError, match="уже выведена"):
+    with pytest.raises(RecordError, match="already retired"):
         retire_link(kb, first, agent=HUMAN, reason="повторно")
 
 
@@ -242,7 +242,7 @@ def test_status_changes_are_logged(kb):
     log = kb.execute("SELECT status, agent, reason FROM status_log WHERE record_id = %s ORDER BY changed_at",
                      (record_id,)).fetchall()
     assert log == [("draft", AGENT, None), ("verified", HUMAN, "сверено с СП 20, стр. 27")]
-    with pytest.raises(RecordError, match="такой записи нет"):
+    with pytest.raises(RecordError, match="no such record"):
         set_status(kb, "atom", uuid7(), "verified", agent=HUMAN)
 
 
@@ -314,7 +314,7 @@ def test_concurrent_same_symmetric_link_written_once(kb):
 
 def test_link_to_itself_rejected(kb):
     w0 = base(kb).refs["@w0"]
-    with pytest.raises(RecordError, match="не может ссылаться на себя"):
+    with pytest.raises(RecordError, match="cannot point to itself"):
         commit(kb, [], [{"rel": "same_as", "src": w0, "dst": w0}], agent=AGENT)
 
 
@@ -375,7 +375,7 @@ def test_edition_period_follows_accepted_revision(kb):
 
 def test_unknown_record_id_rejected(kb):
     base(kb)
-    with pytest.raises(RecordError, match="такой записи нет"):
+    with pytest.raises(RecordError, match="no such record"):
         commit(kb, [Item("atom", by_key(fact()), record_id=uuid7())], agent=AGENT)
 
 
@@ -414,7 +414,7 @@ def test_bundles_in_opposite_order_do_not_deadlock(kb):
 
 def test_naive_moment_rejected(kb):
     record_id = base(kb).revisions[2].record_id
-    with pytest.raises(RecordError, match="часовым поясом"):
+    with pytest.raises(RecordError, match="time zone"):
         lookup.get(kb, "atom", record_id, at=datetime.now())
 
 
@@ -425,7 +425,7 @@ def test_naive_moment_rejected(kb):
     lambda kb: commit(kb, [Item("object", {"kind": "fact"})], agent=AGENT),
 ], ids=["get", "by_key", "set_status", "commit"])
 def test_unknown_target_rejected(kb, call):
-    with pytest.raises(RecordError, match="неизвестный вид записи"):
+    with pytest.raises(RecordError, match="unknown record target"):
         call(kb)
 
 
@@ -482,7 +482,7 @@ def test_errors_name_the_place(kb, bundle, message):
 
 def test_unknown_activity_rejected(kb):
     db.load_vocab(kb)
-    with pytest.raises(RecordError, match="задачи"):
+    with pytest.raises(RecordError, match="activity"):
         commit(kb, [Item("entity", sp20())], agent=AGENT, activity=uuid7())
 
 
@@ -503,7 +503,7 @@ def test_keys_resolve_against_state_before_bundle(kb, entity_first):
     base(kb)
     items = [Item("entity", {"entity_class": "document", "key": "sp22", "label": {"ru": "СП 22"}}),
              Item("atom", fact(ref="@x", key="x", sources=[], about=["ent:sp22"]))]
-    with pytest.raises(RecordError, match="нет записи с ключом sp22"):
+    with pytest.raises(RecordError, match="no record with the key sp22"):
         commit(kb, items if entity_first else items[::-1], agent=AGENT)
 
 
@@ -553,7 +553,7 @@ def test_body_accepted_without_review_replaces_pending_one(kb, existing):
 ], ids=["commit", "set_status", "decide", "retire_link"])
 def test_non_uuid_ids_rejected(kb, call):
     base(kb)
-    with pytest.raises(RecordError, match="'w0': это не UUID"):
+    with pytest.raises(RecordError, match="'w0': not a UUID"):
         call(kb)
 
 
@@ -674,7 +674,7 @@ def test_atom_derived_from_itself_rejected(kb, existing):
     else:
         item = Item("atom", fact(ref="@self", key="self", sources=[], about=["ent:sp20_13330"],
                                  derived_from=["@self"]))
-    with pytest.raises(RecordError, match="выведен из самого себя"):
+    with pytest.raises(RecordError, match="derived from itself"):
         commit(kb, [item], agent=AGENT)
 
 
@@ -762,18 +762,18 @@ def test_sources_without_file_and_order_of_rows(kb):
     [revision] = lookup.history(kb, "atom", result.revisions[2].record_id)
     rows = lookup.revision_sources(kb, "atom", revision["id"])
     assert [(s["position"], s["object"]) for s in rows] == [(0, site), (1, letter), (2, OBJ)]
-    with pytest.raises(RecordError, match="без файла — digest не нужен"):
+    with pytest.raises(RecordError, match="no file — a digest is not needed"):
         commit(kb, [Item("atom", fact(ref="@x", key="x", about=["ent:sp20_13330"],
                                       sources=[{"object": site, "object_version": 1, "digest": DIGEST}]))],
                agent=AGENT)
 
 
 @pytest.mark.parametrize("source, message", [
-    (lambda: {"object": f"obj:{uuid7()}", "object_version": 1, "digest": DIGEST}, "такого объекта нет"),
-    (lambda: {"object": "obj:not-a-uuid", "object_version": 1, "digest": DIGEST}, "такого объекта нет"),
-    (lambda: {"object": OBJ, "object_version": 2, "digest": DIGEST}, "нет версии 2"),
-    (lambda: {"object": OBJ, "object_version": 1, "digest": "sha256:" + "cd" * 32}, "не совпадает с версией 1"),
-    (lambda: {"object": OBJ, "object_version": 1}, "digest не указан"),
+    (lambda: {"object": f"obj:{uuid7()}", "object_version": 1, "digest": DIGEST}, "no such object"),
+    (lambda: {"object": "obj:not-a-uuid", "object_version": 1, "digest": DIGEST}, "no such object"),
+    (lambda: {"object": OBJ, "object_version": 2, "digest": DIGEST}, "has no version 2"),
+    (lambda: {"object": OBJ, "object_version": 1, "digest": "sha256:" + "cd" * 32}, "does not match version 1"),
+    (lambda: {"object": OBJ, "object_version": 1}, "digest not given"),
 ], ids=["нет объекта", "не UUID", "нет версии", "чужой digest", "без digest"])
 def test_source_must_match_object_version(kb, source, message):
     with pytest.raises(RecordError, match=message):
