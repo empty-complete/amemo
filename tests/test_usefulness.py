@@ -211,7 +211,7 @@ def test_future_mark_is_rejected_when_scoring(kb):
     utility().mark_helpful(kb, result["retrieval_id"], [ref],
                            agent=AGENT, activity=activity, now=NOW + timedelta(seconds=1))
 
-    with pytest.raises(ValueError, match="будущ"):
+    with pytest.raises(ValueError, match="future"):
         utility().score(kb, revision.record_id, now=NOW)
 
 

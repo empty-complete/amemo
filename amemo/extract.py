@@ -34,7 +34,7 @@ class _NoDoctype(ElementTree.TreeBuilder):
     """Любое объявление DOCTYPE (а с ним и сущностей) отвергается при разборе, в любой кодировке и после комментариев."""
 
     def doctype(self, name, pubid, system):
-        raise ValueError("DOCTYPE в XML")
+        raise ValueError("DOCTYPE in XML")
 
 
 def _round(x: float, decimals: int) -> Decimal:
@@ -208,7 +208,7 @@ def _walk(el: ElementTree.Element, out: _Pages) -> None:
         else:
             _walk(child, out)
         if out.chars > MAX_TEXT_CHARS:
-            raise ValueError("текст больше предела")
+            raise ValueError("the text is over the limit")
 
 
 def docx_pages(file: Path) -> list[str] | None:
@@ -232,7 +232,7 @@ def _xml(zf: zipfile.ZipFile, name: str) -> ElementTree.Element:
     """Часть пакета Office деревом: без DOCTYPE и не больше MAX_XML_BYTES (иначе ValueError)."""
     data = _read_limited(zf, name)
     if data is None:
-        raise ValueError(f"{name}: больше предела")
+        raise ValueError(f"{name}: over the limit")
     parser = ElementTree.XMLParser(target=_NoDoctype())
     parser.feed(data)
     return parser.close()
@@ -272,7 +272,7 @@ def pptx_pages(file: Path) -> list[str] | None:
                 text = "\n".join(line for line in (_paragraph(p) for p in _xml(zf, name).iter(A + "p")) if line)
                 chars += len(text)
                 if chars > MAX_TEXT_CHARS:
-                    raise ValueError("текст больше предела")
+                    raise ValueError("the text is over the limit")
                 pages.append(text)
         return pages if any(pages) else None
     except _BAD_FILE:

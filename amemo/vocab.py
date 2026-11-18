@@ -23,7 +23,7 @@ def family(conn: psycopg.Connection, kind: str) -> str:
     """Семья вида атома: source или work (вид без family — work). Нет такого вида — VocabError."""
     row = conn.execute("SELECT data->>'family' FROM concept WHERE scheme = 'kind' AND code = %s", (kind,)).fetchone()
     if row is None:
-        raise VocabError(f"вид атома {kind!r}: нет в словаре kind")
+        raise VocabError(f"atom kind {kind!r}: not in the kind vocabulary")
     return row[0] or DEFAULT_FAMILY
 
 

@@ -213,7 +213,7 @@ def test_session_activity_is_one_task_per_label(kb):
     assert rows == [(first, "session", "mcp:x"), (other, "session", "mcp:y")]
     assert first.version == 7
     for bad in ("", "   ", None, 5):
-        with pytest.raises(ValueError, match="метка"):
+        with pytest.raises(ValueError, match="label"):
             usefulness.session_activity(kb, bad)
 
 

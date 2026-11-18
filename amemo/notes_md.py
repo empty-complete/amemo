@@ -116,9 +116,9 @@ def export(conn: psycopg.Connection, *, store, out: Path, selection: bundle.Sele
     подборки (bundle.gather): заметка о чём-то тянет за собой и объект. with_files — файлы источников из store."""
     out = Path(out)
     if out.exists():
-        raise bundle.BundleError(f"{out.name}: уже есть — заметки пишутся в новое место")
+        raise bundle.BundleError(f"{out.name}: already exists — notes are written to a new place")
     if with_files and store is None:
-        raise bundle.BundleError("with_files: нужно хранилище объектов (store)")
+        raise bundle.BundleError("with_files: the object store is required (store)")
     lang = lang if lang in DIRS else "ru"
     objects_dir, sources_dir = DIRS[lang]
     head = HEAD[lang]
@@ -161,7 +161,7 @@ def export(conn: psycopg.Connection, *, store, out: Path, selection: bundle.Sele
                     try:
                         shutil.copyfile(store.content(o["id"], v["n"]), target)
                     except (StoreError, OSError) as e:
-                        raise bundle.BundleError(f"obj:{oid} версия {v['n']}: файл не скопирован из хранилища: "
+                        raise bundle.BundleError(f"obj:{oid} version {v['n']}: the file is not copied from the store: "
                                                  f"{bundle._reason(e)}") from e
         counts = {"notes": 0, "objects": 0, "files": len(file_of) if with_files else 0}
         for target, rows in (("entity", entities), ("atom", atoms)):
@@ -359,7 +359,7 @@ def import_(conn: psycopg.Connection, store, docs, root: Path, *, agent: str, dr
         return out
     made = check.submit(conn, store, docs, proposals, agent=agent, reason="загрузка заметок Markdown")
     if made.state != "approved":
-        raise bundle.BundleError("заметки не записаны: " + "; ".join(
+        raise bundle.BundleError("the notes are not written: " + "; ".join(
             f"{i.get('where', '')}: {i.get('message', i.get('code', ''))}"
             for i in (made.report.get("issues") or [])[:5] if i.get("severity") == "violation"))
     # записи ответа — в порядке предложений (check.submit: план за планом)

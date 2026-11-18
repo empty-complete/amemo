@@ -43,7 +43,7 @@ def rules_for_entity(conn: psycopg.Connection, entity_class: str) -> templates.R
 def _entity_uuid(conn, ref: str) -> uuid.UUID:
     """ent: с UUID или ключом → id сущности; не сущность — RecordError, нет такой — RecordNotFound."""
     if not isinstance(ref, str) or not ref.startswith("ent:"):
-        raise records.RecordError(f"{ref!r}: карточка строится только для сущности (ent:<UUID или ключ>)")
+        raise records.RecordError(f"{ref!r}: a card is built only for an entity (ent:<UUID or key>)")
     return records.resolve(conn, ref)[1]
 
 
@@ -176,7 +176,7 @@ def _profile(rules: templates.Rules) -> str | None:
 def _one(conn, ctx: _Context, entity_id: uuid.UUID) -> dict:
     record = lookup.get(conn, "entity", entity_id)
     if record is None:
-        raise records.RecordNotFound(f"ent:{entity_id}: нет такой сущности")
+        raise records.RecordNotFound(f"ent:{entity_id}: no such entity")
     cls = record["entity_class"]
     rules = templates.rules_for(ctx.active, "entity", cls)
     about = _atoms_about(conn, entity_id)

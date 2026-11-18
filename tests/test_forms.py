@@ -44,7 +44,7 @@ def test_ui_path_without_rule_is_pack_error(tmp_path):
     with pytest.raises(packs.PackError) as e:
         _load(root)
     text = str(e.value)
-    assert "idea.yaml" in text and "шаблон idea" in text and "ui.fields: valid_to" in text
+    assert "idea.yaml" in text and "template idea" in text and "ui.fields: valid_to" in text
 
 
 def test_ui_paths_of_rules_ancestors_interfaces_and_base_are_accepted(tmp_path):
@@ -58,8 +58,8 @@ def test_ui_paths_of_rules_ancestors_interfaces_and_base_are_accepted(tmp_path):
 
 
 @pytest.mark.parametrize("ui, words", [
-    ({"fields": [{"path": "content.values[property=depth]"}]}, "property depth нет в словаре"),
-    ({"fields": [{"path": "about"}, {"path": "about"}]}, "путь повторяется"),
+    ({"fields": [{"path": "content.values[property=depth]"}]}, "property depth is not in the property vocabulary"),
+    ({"fields": [{"path": "about"}, {"path": "about"}]}, "the path repeats"),
 ])
 def test_ui_bad_fields(tmp_path, ui, words):
     with pytest.raises(packs.PackError, match=words):
@@ -71,7 +71,7 @@ def test_ui_only_for_atom_and_entity(tmp_path):
     (root / "templates" / "idea.yaml").write_text(yaml.safe_dump({
         "code": "seealso", "version": "1.0.0", "target": "link", "applies_to": "see_also",
         "ui": {"body": "none"}}), encoding="utf-8")
-    with pytest.raises(packs.PackError, match="ui — только у шаблонов atom и entity"):
+    with pytest.raises(packs.PackError, match="ui — only for templates of atom and entity"):
         _load(root)
 
 

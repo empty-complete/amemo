@@ -157,7 +157,7 @@ def export(conn: psycopg.Connection, *, store, folder: Path, agent: str, selecti
     {"manifest": манифест amem.bundle/1, "refs": атомы, "report": HTML-отчёт}. Пустой отбор — BundleError."""
     refs = select(conn, selection)
     if not refs:
-        raise BundleError("антология пуста: в отборе нет проверенных записей")
+        raise BundleError("the anthology is empty: the selection has no verified records")
     manifest = bundle.export(conn, store=store, folder=folder, agent=agent, with_files=with_files,
                              selection=Selection(refs=tuple(refs), statuses=ANTHOLOGY_STATUSES,
                                                  include_private=selection.include_private))

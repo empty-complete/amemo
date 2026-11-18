@@ -53,14 +53,14 @@ def test_canonical_keeps_input_and_is_idempotent():
 
 
 @pytest.mark.parametrize("target, change, message", [
-    ("atom", lambda p: p["sources"][0].pop("object"), "нет object — источник не разрешён"),
-    ("atom", lambda p: p["sources"][0].pop("object_version"), "нет object_version"),
+    ("atom", lambda p: p["sources"][0].pop("object"), "no object — the source is not resolved"),
+    ("atom", lambda p: p["sources"][0].pop("object_version"), "no object_version"),
     ("atom", lambda p: p.update(about=["ent:sp20_13330"]), r"about\[0\]"),
     ("atom", lambda p: p.update(about=["@sp20"]), r"about\[0\]"),
-    ("atom", lambda p: p.update(about=[f"atm:{uuid7()}"]), "нужна ent:"),
+    ("atom", lambda p: p.update(about=[f"atm:{uuid7()}"]), "ent:<UUIDv7> is required"),
     ("atom", lambda p: p.update(derived_from=[ENT]), r"derived_from\[0\]"),
     ("atom", lambda p: p.update(about="ent:sp20"), "about"),                     # одно значение вместо списка
-    ("atom", lambda p: p.update(label={"ru": "w0\x00"}), r"label.ru: символ \\u0000"),
+    ("atom", lambda p: p.update(label={"ru": "w0\x00"}), r"label.ru: the character \\u0000"),
     ("entity", lambda p: p.update(edition_of="@sp20"), "edition_of"),
 ], ids=["нет объекта", "нет версии объекта", "ключ не разрешён", "@имя не разрешено", "about на атом",
         "derived_from на сущность", "about не список", "символ NUL", "редакция сущности не разрешена"])
@@ -72,7 +72,7 @@ def test_unresolved_or_wrong_refs_rejected(target, change, message):
 
 
 def test_unknown_target_rejected():
-    with pytest.raises(canon.CanonError, match="неизвестный вид записи 'link'"):
+    with pytest.raises(canon.CanonError, match="unknown record target 'link'"):
         canon.canonical(atom(), "link")
 
 
@@ -96,16 +96,16 @@ def test_large_numbers_survive_jsonb(number):
 def test_large_integers():
     assert canon.content_hash(canon.canonical(value(10 ** 16), "atom")) == \
         canon.content_hash(canon.canonical(value(1e16), "atom"))
-    with pytest.raises(canon.CanonError, match="без потерь"):
+    with pytest.raises(canon.CanonError, match="without loss"):
         canon.canonical(value(2 ** 53 + 1), "atom")
-    with pytest.raises(canon.CanonError, match="больше любого числа JSON"):
+    with pytest.raises(canon.CanonError, match="greater than any JSON number"):
         canon.canonical(value(10 ** 400), "atom")
 
 
 def test_keys_merging_under_nfc_rejected():
     nfd = unicodedata.normalize("NFD", "й")
     table = {"columns": [{"code": "c", "label": {"ru": "c"}}], "rows": [[{"й": 1, nfd: 2}]]}
-    with pytest.raises(canon.CanonError, match="совпадают после приведения к NFC"):
+    with pytest.raises(canon.CanonError, match="coincide after normalization to NFC"):
         canon.canonical(atom(content={"table": table}), "atom")
 
 

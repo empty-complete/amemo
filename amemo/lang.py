@@ -34,7 +34,7 @@ def check(value) -> str | None:
         return None
     if isinstance(value, str) and value.strip().lower() in LANGS:
         return value.strip().lower()
-    raise LangError(f"lang {value!r}: допустимы {', '.join(LANGS)}")
+    raise LangError(f"lang {value!r}: allowed are {', '.join(LANGS)}")
 
 
 def from_header(header: str | None) -> str | None:

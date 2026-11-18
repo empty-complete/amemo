@@ -148,7 +148,7 @@ def test_helpful_only_for_own_session(env, base, kb):
             assert not err and body == {"retrieval_id": rid, "marked": [atom]}
             err, body = await call(mine, "amemo_helpful", retrieval_id=rid, refs=["atm:019a0000-0000-7000-8000-0000"
                                                                                    "00000000"])
-            assert err and "не входит в эту выдачу" in body["detail"]
+            assert err and "is not in this result" in body["detail"]
             err, body = await call(mine, "amemo_helpful", retrieval_id="не-uuid", refs=[atom])
             assert err and body["code"] == "bad_request"
     sync(main)

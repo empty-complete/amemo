@@ -70,7 +70,7 @@ def test_export_writes_bundle_and_report(world, tmp_path):
 
 def test_empty_anthology_refuses(world, tmp_path):
     pg, _ = world
-    with pytest.raises(bundle.BundleError, match="антология пуста"):
+    with pytest.raises(bundle.BundleError, match="the anthology is empty"):
         anthology.export(pg, store=None, folder=tmp_path / "x", agent=PERSON, selection=bundle.Selection(tags=("нет",)))
 
 
