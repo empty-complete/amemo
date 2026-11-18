@@ -75,4 +75,7 @@ test("заголовок — по коду на языке интерфейса;
   expect(problemText(bare)).toBe("Папка уже есть");
   const unknown = await problem({ title: "Teapot", status: 418, code: "brand_new" }, 418);
   expect(unknown.title).toBe("Teapot");
+  // без code — ответ не от службы amemo: его заголовок точнее общего по статусу
+  const foreign = await problem({ title: "Такая папка уже есть", status: 409 }, 409);
+  expect(foreign.title).toBe("Такая папка уже есть");
 });

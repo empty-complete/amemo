@@ -6,12 +6,12 @@ type Problem = components["schemas"]["Problem"];
 export type CheckIssue = components["schemas"]["CheckIssue"];
 
 /** Заголовок ошибки на языке интерфейса (словарь error.*): по code ответа problem+json — точнее, чем по статусу
- * (503 бывает и «нет службы», и «не уложилась»); кода в словаре нет — по статусу, статуса нет — fallback. */
+ * (503 бывает и «нет службы», и «не уложилась»); кода в словаре нет — по статусу. Ответ вовсе без code — не от
+ * службы amemo: его собственный заголовок (fallback) точнее общего по статусу. */
 export function problemTitle(code: string | undefined, status: number, fallback?: string): string {
   const byCode = code ? i18n.t(`error.code.${code}`, { defaultValue: "" }) : "";
-  return (
-    byCode || i18n.t(`error.status.${status}`, { defaultValue: "" }) || fallback || i18n.t("error.unknown")
-  );
+  const byStatus = i18n.t(`error.status.${status}`, { defaultValue: "" });
+  return byCode || (code ? byStatus || fallback : fallback || byStatus) || i18n.t("error.unknown");
 }
 
 /** Ошибка службы в формате problem+json (RFC 9457), разобранная для экрана. */
