@@ -84,7 +84,7 @@ def main(argv: Sequence[str] | None = None, *, env: Mapping[str, str] | None = N
         # и опции дают пустой ответ и строку в hooks.log (код 2 у Claude Code заблокировал бы запрос)
         if len(argv) == 2 and not argv[1].startswith("-"):
             return hooks.main(argv[1], environment)
-        hooks.log(environment, "hook", f"неверный вызов amemo {' '.join(argv)!r}: нужно amemo hook СОБЫТИЕ")
+        hooks.log(environment, "hook", f"wrong call amemo {' '.join(argv)!r}: amemo hook EVENT is required")
         return OK
     made: list[Context] = []              # Context вызова: report берёт из него вывод и --json; close — в конце
     try:

@@ -241,7 +241,7 @@ def test_stuck_hook_is_cut_by_the_budget(kb, env, tmp_path, monkeypatch):
     root = git_folder(tmp_path, "alpha")
     assert hooks.run("SessionStart", event("SessionStart", cwd=str(root)), env) == ""
     assert time.monotonic() - started <= 1.5
-    assert "бюджет" in hooks_log(env)
+    assert "budget" in hooks_log(env)
 
 
 def test_without_dsn_the_answer_is_empty_with_code_0_and_a_log_line(tmp_path, monkeypatch, capsys):
@@ -251,7 +251,7 @@ def test_without_dsn_the_answer_is_empty_with_code_0_and_a_log_line(tmp_path, mo
         assert cli.main(["hook", name], env=env) == 0
         assert capsys.readouterr().out == ""
     log = hooks_log(env)
-    assert log.count("AMEMO_DSN не задана") == 3
+    assert log.count("AMEMO_DSN is not set") == 3
     assert oct(os.stat(Path(env["AMEMO_STATE"]) / "hooks.log").st_mode & 0o777) == "0o600"
 
 
@@ -267,7 +267,7 @@ def test_any_failure_gives_code_0_and_an_empty_answer(env, tmp_path, monkeypatch
         assert cli.main(argv, env=environ) == 0, argv
         assert capsys.readouterr().out == "", argv
     log = hooks_log(env)
-    assert "не JSON" in log and "нужен объект JSON" in log and "'Notification'" in log and "OperationalError" in log
+    assert "not JSON" in log and "a JSON object is required" in log and "'Notification'" in log and "OperationalError" in log
 
 
 def test_session_start_says_when_the_database_refuses_the_connection(env):
@@ -284,7 +284,7 @@ def test_any_hook_call_shape_gives_code_0_and_an_empty_answer(env, monkeypatch, 
         assert cli.main(argv, env=env) == 0, argv
         captured = capsys.readouterr()
         assert captured.out == "" and captured.err == "", argv
-    assert hooks_log(env).count("неверный вызов") == 5
+    assert hooks_log(env).count("wrong call") == 5
 
 
 def test_hook_is_listed_in_cli_help(capsys):

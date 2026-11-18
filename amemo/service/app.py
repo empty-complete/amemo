@@ -132,17 +132,17 @@ def _sweep(settings: Settings) -> None:
     try:
         removed = api.bundle_sweep(settings.state)
     except OSError as e:
-        log.warning("подборки в %s не вычищены: %s", settings.state, e)
+        log.warning("bundles in %s are not cleaned up: %s", settings.state, e)
         removed = 0
     if removed:
-        log.info("удалено подборок и загрузок старше суток: %d", removed)
+        log.info("removed bundles and uploads older than a day: %d", removed)
     try:
         parts = api.object_upload_sweep(settings.docs)
     except OSError as e:
-        log.warning("временные файлы загрузки в папке документов не вычищены: %s", e)
+        log.warning("temporary upload files in the documents folder are not cleaned up: %s", e)
         return
     if parts:
-        log.info("удалено брошенных временных файлов загрузки в папке документов: %d", parts)
+        log.info("removed abandoned temporary upload files in the documents folder: %d", parts)
 
 
 async def _sweeper(settings: Settings) -> None:
@@ -166,10 +166,10 @@ def _keep_embeddings(app) -> float:
         with app.state.pool.connection() as conn:
             kept = embed.keep(conn, choose_provider(app.state))
     except Exception as e:                                # noqa: BLE001 — фоновая задача переживает любой сбой прохода
-        log.warning("вектора смыслового поиска не досчитаны: %s: %s", type(e).__name__, e)
+        log.warning("semantic search vectors are not caught up: %s: %s", type(e).__name__, e)
         return KEEP_EVERY
     if kept["embedded"]:
-        log.info("смысловой поиск: посчитано векторов %d, осталось %d (%s)",
+        log.info("semantic search: vectors computed %d, left %d (%s)",
                  kept["embedded"], kept["missing"], kept["state"])
     if kept["state"] in ("off", "unavailable", "foreign"):
         return KEEP_IDLE
@@ -182,7 +182,7 @@ def _preload(app: Starlette) -> None:
     from . import problems as problems_, ui
 
     for name, why in updates.preload():
-        log.warning("модуль %s не импортировался заранее: %s", name, why)
+        log.warning("the module %s was not imported ahead: %s", name, why)
     try:
         app.state.ui_root = ui.static_root()
     except problems_.Problem:
@@ -207,7 +207,7 @@ def _updates_startup(updater: updates.Updater) -> None:
     try:
         updater.startup()
     except OSError as e:                         # AMEMO_STATE не пишется — служба работает и без обновлений
-        log.warning("состояние обновлений в %s не записано: %s", updater.root, e)
+        log.warning("the update state in %s is not written: %s", updater.root, e)
 
 
 async def _updates(updater: updates.Updater) -> None:
@@ -221,7 +221,7 @@ async def _updates(updater: updates.Updater) -> None:
                 await anyio.to_thread.run_sync(updater.scheduled, abandon_on_cancel=True)
             await anyio.to_thread.run_sync(updater.watch, updater.idle, updater.free, abandon_on_cancel=True)
         except Exception:  # noqa: BLE001
-            log.exception("обновления: шаг не удался")
+            log.exception("updates: the step failed")
         await anyio.sleep(updates.TICK)
 
 
