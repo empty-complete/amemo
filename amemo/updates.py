@@ -498,7 +498,7 @@ class Updater:
         except FileNotFoundError:
             return {}
         except (OSError, ValueError) as e:
-            log.warning("%s не читается (%s): состояние обновлений — с нуля", self.path, e)
+            log.warning("%s is not readable (%s): the update state starts from scratch", self.path, e)
             return {}
         return data if isinstance(data, dict) else {}
 
@@ -528,7 +528,7 @@ class Updater:
         if detail:
             entry["detail"] = detail
         data["journal"] = [*(data.get("journal") or []), entry][-JOURNAL_KEPT:]
-        log.info("обновление: %s %s (%s, с %s)%s", event, version or "", self.kind.kind, self.current,
+        log.info("update: %s %s (%s, from %s)%s", event, version or "", self.kind.kind, self.current,
                  f": {detail}" if detail else "")
 
     # --- статус ---
@@ -644,7 +644,7 @@ class Updater:
                     found = self._choose(self._fetch(snapshot), snapshot)
                 except NetworkError as e:
                     error, found = str(e), None
-                    log.info("проверка обновлений не удалась: %s", e)
+                    log.info("the update check failed: %s", e)
                 with self._changing() as data:
                     data["checked_at"] = _iso(self.now())
                     data["check_error"] = error
@@ -733,9 +733,9 @@ class Updater:
         try:
             self.install(version)
         except UpdateError as e:
-            log.info("обновление до %s не началось: %s", version, e)
+            log.info("the update to %s did not start: %s", version, e)
         except Exception:  # noqa: BLE001 — фоновая установка не роняет службу
-            log.exception("обновление до %s: необработанная ошибка", version)
+            log.exception("update to %s: unhandled error", version)
             with self._changing() as data:
                 data["state"], data["message"] = "failed", f"обновление до {version} не встало: внутренняя ошибка"
         finally:
@@ -948,7 +948,7 @@ class Updater:
             try:
                 version = self.ready_to_install()
             except UpdateError as e:
-                log.info("автообновление отложено: %s", e)
+                log.info("the automatic update is postponed: %s", e)
                 return status
             self._installing = version
             self._install_in_background(version)

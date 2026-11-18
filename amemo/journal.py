@@ -46,6 +46,6 @@ def record(path: Path | None, *, recipe: str, query: str, agent: str, base_id: s
             finally:
                 os.close(fd)
     except OSError as e:
-        log.warning("журнал запросов %s не записан: %s", path, e)
+        log.warning("the query log %s is not written: %s", path, e)
         return False
     return True

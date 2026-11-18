@@ -220,7 +220,7 @@ def load_tokens(path: Path | str) -> tuple[Token, ...]:
         if info.st_mode & 0o022:
             raise SettingsError(f"{path}: файл токенов доступен на запись другим пользователям — chmod 600 {path}")
         if info.st_mode & 0o044:
-            log.warning("%s: файл токенов читают другие пользователи — chmod 600 %s", path, path)
+            log.warning("%s: the tokens file is readable by other users — chmod 600 %s", path, path)
     try:
         data = tomllib.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, tomllib.TOMLDecodeError) as e:

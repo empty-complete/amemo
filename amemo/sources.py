@@ -200,7 +200,7 @@ def ocr_setup(config=None) -> OcrSetup | None:
         except settings.SettingsError as e:      # служба и CLI откажут при старте; извлечение текста — нет
             if str(e) not in _WARNED:
                 _WARNED.add(str(e))
-                log.warning("OCR недоступен: неверная настройка — %s", e)
+                log.warning("OCR is unavailable: a wrong setting — %s", e)
             return None
     if config.ocr == "none":
         return None
@@ -220,7 +220,7 @@ def system_tessdata() -> Path | None:
     try:
         return Path(pymupdf.get_tessdata())
     except Exception as e:              # RuntimeError «tesseract не найден» и что угодно из whereis
-        log.debug("системного tesseract нет: %s", e)
+        log.debug("no system tesseract: %s", e)
         return None
 
 

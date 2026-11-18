@@ -164,13 +164,13 @@ def to_problem(exc: BaseException) -> Problem:
 async def handle(request: Request, exc: Exception) -> JSONResponse:
     problem = to_problem(exc)
     if problem.code == "db_unavailable":
-        log.warning("%s %s: база недоступна: %s", request.method, request.url.path, exc)
+        log.warning("%s %s: the database is unavailable: %s", request.method, request.url.path, exc)
     elif problem.code == "timeout":
-        log.warning("%s %s: запрос к базе оборван по statement_timeout", request.method, request.url.path)
+        log.warning("%s %s: the database query was cut by statement_timeout", request.method, request.url.path)
     elif isinstance(exc, (api.StoreUnavailable, api.CopyMissing)):
         log.warning("%s %s: %s (%s)", request.method, request.url.path, exc, exc.where)
     elif problem.status >= 500 and problem is not exc and problem.code == "internal":
-        log.error("%s %s: необработанная ошибка", request.method, request.url.path, exc_info=exc)
+        log.error("%s %s: unhandled error", request.method, request.url.path, exc_info=exc)
     return response(problem.status, problem.code, problem.detail, headers=problem.headers, extra=problem.extra)
 
 

@@ -126,7 +126,7 @@ def run(event: str, stdin: str | Callable[[], str], env: Mapping[str, str] | Non
     worker.start()
     worker.join(budget)
     if worker.is_alive():
-        log(env, event, f"бюджет {budget} с превышен — ответ пустой")
+        log(env, event, f"the budget of {budget} s is exceeded — the answer is empty")
         return ""
     if "error" in box:
         exc = box["error"]
@@ -138,16 +138,16 @@ def run(event: str, stdin: str | Callable[[], str], env: Mapping[str, str] | Non
 def handle(event: str, raw: str, env: Mapping[str, str]) -> str:
     """Ответ события без бюджета и перехвата (их даёт run)."""
     if event not in EVENTS:
-        raise HookError(f"событие {event!r} хуком amemo не обрабатывается: допустимы {', '.join(EVENTS)}")
+        raise HookError(f"the amemo hook does not handle the event {event!r}: allowed are {', '.join(EVENTS)}")
     try:
         data = json.loads(raw) if raw and raw.strip() else {}
     except json.JSONDecodeError as e:
-        raise HookError(f"вход хука {event}: не JSON ({e.msg}, позиция {e.pos})") from None
+        raise HookError(f"input of the hook {event}: not JSON ({e.msg}, position {e.pos})") from None
     if not isinstance(data, dict):
-        raise HookError(f"вход хука {event}: нужен объект JSON")
+        raise HookError(f"input of the hook {event}: a JSON object is required")
     dsn = _dsn(env)
     if dsn is None:
-        log(env, event, "AMEMO_DSN не задана — ответ пустой")
+        log(env, event, "AMEMO_DSN is not set — the answer is empty")
         return ""
     if event == "PreCompact":
         return COMPACT                    # простой текст: указания к сводке сжатия, база не нужна
