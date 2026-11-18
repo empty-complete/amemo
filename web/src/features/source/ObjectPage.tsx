@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../api/client";
-import { type ApiError, errorText } from "../../api/errors";
+import { type ApiError, errorText, problemText } from "../../api/errors";
 import { contentUrl, q } from "../../api/queries";
 import type { components } from "../../api/schema";
 import { AuthedImg, FileLink } from "../../ui/FileLink";
@@ -80,7 +80,7 @@ function AskAgent({ object, version, what }: { object: string; version: number; 
             setMsg(t("source.task_set"));
             qc.invalidateQueries({ queryKey: ["tasks", object] });
           } catch (e) {
-            setMsg((e as ApiError).detail ?? (e as ApiError).title);
+            setMsg(problemText(e as ApiError));
           }
         }}
       >

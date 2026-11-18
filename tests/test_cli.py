@@ -503,7 +503,7 @@ def test_review_list_claim_release_resolve_stats(run, kb, store, docs, start):
     code, out, _ = run("review", "resolve", item, "confirmed", "--confidence", "0.95", "--json", extra=judge)
     assert code == 0 and js(out)["status"]
     code, _, err = run("review", "resolve", item, "refuted")
-    assert code == 6 and "решил model:judge" in err             # пункт уже решён
+    assert code == 6 and "resolved by model:judge" in err             # пункт уже решён
     assert run("review", "resolve", "019a0000-0000-7000-8000-000000000000", "confirmed")[0] == 4
     assert run("review", "resolve", "не-uuid", "confirmed")[0] == 2
 

@@ -1,4 +1,4 @@
-import { ApiError, problemFromResponse } from "./errors";
+import { ApiError, problemFromResponse, problemText } from "./errors";
 
 test("problem+json становится ApiError с кодом и замечаниями", async () => {
   const res = new Response(
@@ -53,4 +53,26 @@ test("заголовок по коду точнее статуса: 503 timeout,
   expect((await problemFromResponse(pj(507, "quota_exceeded"))).title).toMatch(/исчерпано/);
   const e = await problemFromResponse(new Response("", { status: 408 }));
   expect(e.title).toBe("Служба не дождалась запроса");
+});
+
+test("заголовок — по коду на языке интерфейса; английская подробность идёт следом, русская — одна", async () => {
+  const problem = (body: object, status: number) =>
+    problemFromResponse(
+      new Response(JSON.stringify(body), { status, headers: { "content-type": "application/problem+json" } }),
+    );
+  const english = await problem(
+    { title: "Not found", status: 404, code: "not_found", detail: "no record with the key wind_old" },
+    404,
+  );
+  expect(english.title).toBe("Не найдено");
+  expect(problemText(english)).toBe("Не найдено: no record with the key wind_old");
+  const russian = await problem(
+    { status: 404, code: "not_found", detail: "нет записи с ключом wind_old" },
+    404,
+  );
+  expect(problemText(russian)).toBe("нет записи с ключом wind_old");
+  const bare = await problem({ status: 409, code: "folder_exists" }, 409);
+  expect(problemText(bare)).toBe("Папка уже есть");
+  const unknown = await problem({ title: "Teapot", status: 418, code: "brand_new" }, 418);
+  expect(unknown.title).toBe("Teapot");
 });

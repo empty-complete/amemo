@@ -21,7 +21,7 @@ import {
   Separator,
 } from "react-aria-components";
 import { useTranslation } from "react-i18next";
-import { ApiError } from "../../api/errors";
+import { ApiError, problemText as apiProblemText } from "../../api/errors";
 import { folderApi } from "../../api/folders";
 import { q } from "../../api/queries";
 import type { components } from "../../api/schema";
@@ -84,7 +84,7 @@ function NameInput({
   );
 }
 
-const problemText = (e: unknown) => (e instanceof ApiError ? (e.detail ?? e.title) : String(e));
+const problemText = (e: unknown) => (e instanceof ApiError ? apiProblemText(e) : String(e));
 
 type Summary = components["schemas"]["RecordSummary"];
 

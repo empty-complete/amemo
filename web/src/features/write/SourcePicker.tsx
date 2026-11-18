@@ -4,7 +4,7 @@ import { lazy, Suspense, useRef, useState } from "react";
 import { Dialog, Heading, Modal, ModalOverlay } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { apiFetch } from "../../api/auth";
-import { ApiError } from "../../api/errors";
+import { ApiError, problemText, problemTitle } from "../../api/errors";
 import { contentUrl, type ObjectType, q } from "../../api/queries";
 import type { components } from "../../api/schema";
 import { AuthedImg } from "../../ui/FileLink";
@@ -27,8 +27,8 @@ async function upload(file: File): Promise<Obj> {
   fd.append("file", file);
   const res = await apiFetch(`${location.origin}/api/v1/objects`, { method: "POST", body: fd });
   if (!res.ok) {
-    const p = (await res.json().catch(() => ({}))) as { title?: string; detail?: string };
-    throw new ApiError(res.status, p.title ?? "Не удалось загрузить файл", p.detail);
+    const p = (await res.json().catch(() => ({}))) as { title?: string; detail?: string; code?: string };
+    throw new ApiError(res.status, problemTitle(p.code, res.status, p.title), p.detail, p.code);
   }
   return (await res.json()) as Obj;
 }
@@ -183,7 +183,7 @@ export function SourcePicker({
                       qc.invalidateQueries({ queryKey: ["objects"] });
                       setObj(o);
                     } catch (x) {
-                      setErr((x as ApiError).detail ?? (x as Error).message);
+                      setErr(x instanceof ApiError ? problemText(x) : (x as Error).message);
                     }
                   }}
                 />
