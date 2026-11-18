@@ -198,7 +198,7 @@ def test_overlapping_edition_rejected_whole_bundle(kb):
     (lambda: [Item("atom", fact(about=["@nobody"], sources=[]))], "@nobody: the batch has no record"),
     (lambda: [Item("entity", sp20()), Item("entity", sp20(key="other"))], "@sp20: twice in one batch"),
     (lambda: [Item("atom", {**fact(ref="@a", sources=[]), "about": ["@b"]}),
-              Item("atom", fact(ref="@b", key="b", sources=[], about=[]))], "нужна ent:"),
+              Item("atom", fact(ref="@b", key="b", sources=[], about=[]))], "ent:<UUIDv7> is required"),
     (lambda: [], "the batch is empty"),
 ], ids=["ключ занят", "нет ключа", "нет @имени", "@имя дважды", "about на атом из пачки", "пустая пачка"])
 def test_bad_bundles_rejected(kb, items, message):
