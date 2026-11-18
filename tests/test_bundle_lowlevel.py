@@ -103,7 +103,7 @@ def test_adopt_without_files_and_new_version_later(pg, store, tmp_path):
     objects.adopt(pg, store, _record(oid, (1, d1, 3)), files={}, agent=AGENT)
     assert store.head(oid) == 0                                    # версия без файла — без копии
     warnings = objects.adopt(pg, store, _record(oid, (1, d1, 3), (2, d2, 4)), files={d2: file2}, agent=AGENT)
-    assert store.head(oid) == 0 and len(warnings) == 1 and "версии 2" in warnings[0]
+    assert store.head(oid) == 0 and len(warnings) == 1 and "version 2" in warnings[0]
     assert [v["n"] for v in lookup.get_object(pg, oid)["versions"]] == [1, 2]
     other = uuid7()                                                # обе версии с файлами — по порядку
     file3, d3 = _file(tmp_path, "v3.txt", b"three")
