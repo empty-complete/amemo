@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Dialog, Heading, Modal, ModalOverlay } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { api } from "../../api/client";
-import type { ApiError } from "../../api/errors";
+import { type ApiError, problemText } from "../../api/errors";
 import { issueText } from "../../api/issues";
 import { q } from "../../api/queries";
 import type { components } from "../../api/schema";
@@ -342,7 +342,7 @@ export function KindDrawer({ page = false }: { page?: boolean } = {}) {
       // замечание к свойству (form[i]…) показывает само свойство, к имени вида — поле имени; прочие — общей строкой,
       // иначе отказ службы остался бы невидимым
       const loose = (err.issues ?? []).filter((i) => !/^(label(\.[a-z]{2})?|form\[\d+\])/.test(i.path ?? ""));
-      if (!err.issues?.length) setMsg(err.detail ?? err.title);
+      if (!err.issues?.length) setMsg(problemText(err));
       else if (loose.length) setMsg(loose.map(issueText).join("; "));
     }
   };
@@ -353,7 +353,7 @@ export function KindDrawer({ page = false }: { page?: boolean } = {}) {
       await qc.invalidateQueries({ queryKey: ["templates"] });
       setD(null);
     } catch (e) {
-      setMsg((e as ApiError).detail ?? (e as ApiError).title);
+      setMsg(problemText(e as ApiError));
     }
   };
   const setForm = (form: FormField[]) => d && setD({ ...d, form });

@@ -4,7 +4,7 @@
 import { useSyncExternalStore } from "react";
 import { apiFetch } from "../../api/auth";
 import { langHeaders } from "../../api/client";
-import { ApiError, problemFromResponse } from "../../api/errors";
+import { ApiError, problemFromResponse, problemText } from "../../api/errors";
 import type { components } from "../../api/schema";
 import { skyBus } from "../sky/bus";
 import type { Star } from "../sky/model";
@@ -54,7 +54,7 @@ async function send(p: Pending, keepalive = false) {
       p.onDone?.({} as Submitted);
     } catch (e) {
       const err = e instanceof ApiError ? e : null;
-      p.onIssues?.([], err?.detail ?? err?.title ?? "Нет связи со службой amemo");
+      p.onIssues?.([], err ? problemText(err) : "Нет связи со службой amemo");
     }
     return;
   }
@@ -71,7 +71,7 @@ async function send(p: Pending, keepalive = false) {
   } catch (e) {
     const err = e instanceof ApiError ? e : null;
     skyBus.retract(p.id);
-    p.onIssues?.(err?.issues ?? [], err?.detail ?? err?.title ?? "Нет связи со службой amemo");
+    p.onIssues?.(err?.issues ?? [], err ? problemText(err) : "Нет связи со службой amemo");
   }
 }
 
@@ -107,7 +107,7 @@ async function act(p: Pending, fn: () => Promise<void>): Promise<boolean> {
   } catch (e) {
     drop(p.id);
     const err = e instanceof ApiError ? e : null;
-    p.onIssues?.([], err?.detail ?? err?.title ?? "Нет связи со службой amemo");
+    p.onIssues?.([], err ? problemText(err) : "Нет связи со службой amemo");
     return false;
   }
 }

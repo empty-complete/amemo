@@ -36,25 +36,27 @@ from ..packs import PackError
 MEDIA_TYPE = "application/problem+json"
 log = logging.getLogger("amemo.service")
 
-# заголовок — короткая фраза для экрана (веб показывает title, если нет detail)
+# заголовок — короткая фраза по-английски, как и подробность: их читают агенты и журналы. Экран показывает свой
+# заголовок на языке интерфейса по code и статусу (веб — словарь error.*), а этот — только когда своего нет
 TITLES = {
-    400: "Неверный запрос", 401: "Нужен вход", 403: "Запрещено", 404: "Не найдено", 405: "Метод не поддерживается",
-    408: "Тело запроса не дошло", 409: "Конфликт", 413: "Слишком много данных", 415: "Неподдерживаемый тип тела", 416: "Диапазон вне файла",
-    421: "Чужой адрес службы", 422: "Отклонено проверкой", 500: "Внутренняя ошибка службы", 501: "Ещё не сделано",
-    503: "Служба недоступна", 507: "Нет места",
+    400: "Bad request", 401: "Sign-in required", 403: "Forbidden", 404: "Not found", 405: "Method not allowed",
+    408: "The request body did not arrive", 409: "Conflict", 413: "Too much data", 415: "Unsupported media type",
+    416: "The range is outside the file", 421: "Foreign service address", 422: "Rejected by the check",
+    500: "Internal service error", 501: "Not done yet", 503: "The service is unavailable", 507: "No space left",
 }
-CODE_TITLES = {"read_only": "Только чтение", "review_closed": "Уже решено", "bad_origin": "Чужой источник запроса",
-               "forbidden": "Только для человека", "check_rejected": "Отклонено проверкой",
-               "folder_exists": "Папка уже есть", "folder_not_empty": "Папка не пуста",
-               "semantic_unavailable": "Смысловой поиск недоступен", "db_unavailable": "База недоступна",
-               "store_unavailable": "Хранилище копий недоступно", "timeout": "Запрос слишком долгий",
-               "body_timeout": "Тело запроса не дошло", "quota_exceeded": "Нет места для подборок",
-               "ambiguous": "Неоднозначно", "template_exists": "Код вида занят",
-               "template_in_use": "У вида есть записи", "template_invalid": "Вид не прошёл проверку",
-               "task_closed": "Задача уже закрыта", "task_claimed": "Задачу держит другой агент",
-               "update_unsupported": "Обновляется не здесь", "backup_required": "Нужен бэкап",
-               "no_update": "Обновлений нет", "update_busy": "Обновление уже ставится",
-               "auto_update_off": "Автообновление выключено настройкой"}
+CODE_TITLES = {"read_only": "Read only", "review_closed": "Already resolved", "bad_origin": "Foreign request origin",
+               "forbidden": "Only for a person", "check_rejected": "Rejected by the check",
+               "folder_exists": "The folder already exists", "folder_not_empty": "The folder is not empty",
+               "semantic_unavailable": "Semantic search is unavailable",
+               "db_unavailable": "The database is unavailable",
+               "store_unavailable": "The file store is unavailable", "timeout": "The request took too long",
+               "body_timeout": "The request body did not arrive", "quota_exceeded": "No space left for bundles",
+               "ambiguous": "Ambiguous", "template_exists": "The kind code is taken",
+               "template_in_use": "The kind has records", "template_invalid": "The kind did not pass the check",
+               "task_closed": "The task is already closed", "task_claimed": "Another agent holds the task",
+               "update_unsupported": "Updated elsewhere", "backup_required": "A backup is required",
+               "no_update": "No updates", "update_busy": "An update is already being installed",
+               "auto_update_off": "Automatic updates are switched off in the settings"}
 RESERVED = frozenset({"type", "title", "status", "code", "detail"})       # расширения их не заменяют
 REVIEW = {"closed": (409, "review_closed"), "forbidden": (403, "review_forbidden"),
           "claimed": (403, "review_forbidden"), "stale": (400, "review_bad"), "bad_outcome": (400, "review_bad"),
@@ -116,7 +118,7 @@ def to_problem(exc: BaseException) -> Problem:
         status, code = REVIEW.get(exc.code, (400, "review_bad"))
         if exc.code == "closed":
             at = exc.at.isoformat() if isinstance(exc.at, datetime) else None
-            who = f"решил {exc.by}" if exc.by else "закрыт без решения"
+            who = f"resolved by {exc.by}" if exc.by else "closed without a decision"
             return Problem(status, code, f"{message} ({who}{', ' + at if at else ''})", by=exc.by, at=at)
         return Problem(status, code, message)
     if isinstance(exc, FolderError):
@@ -141,24 +143,26 @@ def to_problem(exc: BaseException) -> Problem:
                         CanonError, PackError)):
         return Problem(400, "bad_request", message)
     if isinstance(exc, embed.EmbeddingError):
-        return Problem(503, "semantic_unavailable", f"смысловой поиск недоступен: {message}")
+        return Problem(503, "semantic_unavailable", f"semantic search is unavailable: {message}")
     if isinstance(exc, api.StoreUnavailable):
         return Problem(503, "store_unavailable", message)
     if isinstance(exc, api.QuotaExceeded):
         return Problem(507, "quota_exceeded", message)
     if isinstance(exc, psycopg.errors.QueryCanceled):
-        return Problem(503, "timeout", "запрос к базе не уложился в отведённое время: сузьте его (меньше limit, "
-                       "depth, фильтр по project или статусам) или повторите позже")
+        return Problem(503, "timeout", "the database query did not fit in the time allowed: narrow it (a smaller "
+                       "limit or depth, a filter by project or statuses) or try again later")
     if isinstance(exc, psycopg.OperationalError):
-        return Problem(503, "db_unavailable", "база недоступна — проверьте, что PostgreSQL запущен и AMEMO_DSN верен")
+        return Problem(503, "db_unavailable", "the database is unavailable — check that PostgreSQL is running and "
+                       "AMEMO_DSN is right")
     if isinstance(exc, psycopg.DataError):
-        return Problem(400, "bad_request", "значение параметра база не принимает (например, знак NUL в строке)")
+        return Problem(400, "bad_request", "the database does not accept a parameter value (for example a NUL "
+                       "character in a string)")
     if isinstance(exc, HTTPException):
         code = HTTP.get(exc.status_code, f"http_{exc.status_code}")
         return Problem(exc.status_code, code, None, headers=exc.headers)
     if isinstance(exc, ValueError):          # последняя ступень перед 500: неверный ввод, который пропустила служба
         return Problem(400, "bad_request", message)
-    return Problem(500, "internal", "внутренняя ошибка службы; подробности — в журнале службы")
+    return Problem(500, "internal", "internal service error; the details are in the service log")
 
 
 async def handle(request: Request, exc: Exception) -> JSONResponse:
