@@ -61,11 +61,11 @@ def static_root() -> Path:
     except ModuleNotFoundError as e:
         if e.name != PACKAGE:
             raise
-        raise _missing("веб-интерфейс не установлен: pip install 'amemo[web]' (пакет amemo_web), затем перезапустите "
-                       "службу; API — по /api/v1") from None
+        raise _missing("the web interface is not installed: pip install 'amemo[web]' (the amemo_web package), then "
+                       "restart the service; the API is at /api/v1") from None
     root = Path(package.static_dir()).resolve()
     if not (root / INDEX).is_file():
-        raise _missing(f"в пакете {PACKAGE} нет сборки интерфейса ({INDEX}): переустановите amemo[web]")
+        raise _missing(f"the package {PACKAGE} has no interface build ({INDEX}): reinstall amemo[web]")
     return root
 
 
@@ -75,11 +75,11 @@ def _file(root: Path, parts: list[str]) -> Path | None:
     for part in parts:
         path = path / part
         if path.is_symlink():
-            raise _missing("нет такого файла интерфейса")
+            raise _missing("no such interface file")
     if not path.is_file():
         return None
     if not path.resolve().is_relative_to(root):          # запасная проверка: путь не ушёл из папки сборки
-        raise _missing("нет такого файла интерфейса")
+        raise _missing("no such interface file")
     return path
 
 
@@ -144,13 +144,13 @@ def ui_file(request: Request) -> Response:
     if parts and parts[-1] == "":
         parts.pop()                 # /ui/records/ — маршрут приложения, как /ui/records
     if any(p in _BAD or p.startswith(".") or "%" in p or "\\" in p or "\x00" in p for p in parts):
-        raise _missing("нет такого файла интерфейса")
+        raise _missing("no such interface file")
     if not parts or parts == [INDEX]:
         return _index(request, root)
     path = _file(root, parts)
     if path is None:
         if parts[0] == ASSETS:
-            raise _missing("нет такого файла интерфейса: сборка обновилась — перезагрузите страницу")
+            raise _missing("no such interface file: the build was updated — reload the page")
         return _index(request, root)
     cache = IMMUTABLE if built(root, parts) else "no-cache"
     return FileResponse(path, headers={**HEADERS, "Cache-Control": cache})

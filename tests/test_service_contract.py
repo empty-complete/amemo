@@ -130,7 +130,7 @@ def test_main_refuses_open_host_without_tokens(tmp_path, capsys, host):
     assert server.main(["--host", host], env=_env(tmp_path), runner=runner) == 2
     assert runner.calls == []
     err = capsys.readouterr().err
-    assert "без входа" in err and "AMEMO_TOKENS" in err and "--no-auth" in err
+    assert "without sign-in" in err and "AMEMO_TOKENS" in err and "--no-auth" in err
 
 
 def test_main_no_auth_warns_loudly(tmp_path, capsys):
@@ -138,7 +138,7 @@ def test_main_no_auth_warns_loudly(tmp_path, capsys):
     assert server.main(["--host", "0.0.0.0", "--no-auth"], env=_env(tmp_path), runner=runner) == 0
     assert runner.calls[0][1]["host"] == "0.0.0.0"
     err = capsys.readouterr().err
-    assert "ВНИМАНИЕ" in err and "БЕЗ ВХОДА" in err and "!" * 72 in err
+    assert "WARNING" in err and "WITHOUT SIGN-IN" in err and "!" * 72 in err
 
 
 def test_main_open_host_with_tokens(tmp_path, capsys):
@@ -147,7 +147,7 @@ def test_main_open_host_with_tokens(tmp_path, capsys):
     assert server.main(["--host", "0.0.0.0"], env=env, runner=runner) == 0
     assert capsys.readouterr().err == ""
     assert server.main(["--host", "0.0.0.0", "--no-auth"], env=env, runner=runner) == 0
-    assert "не действует" in capsys.readouterr().err
+    assert "has no effect" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("argv, env, words", [
@@ -327,12 +327,12 @@ def test_slow_json_body_408(serve, pg, monkeypatch):
     assert time.monotonic() - started < 5
     assert out_headers["connection"] == "close" and out_headers["content-type"].startswith("application/problem+json")
     contract.component("Problem", body)
-    assert "без новых данных" in body["detail"]
+    assert "without new data" in body["detail"]
 
     monkeypatch.setattr(http_v1, "BODY_TOTAL", 0.5)              # капает без пауз, но дольше общего предела
     status, _, body = _answer(_raw(client, "POST", f"{V1}/folders", {"content-type": "application/json"},
                                    _trickles(b" ")))
-    assert status == 408 and body["code"] == "body_timeout" and "целиком" in body["detail"], body
+    assert status == 408 and body["code"] == "body_timeout" and "in full" in body["detail"], body
 
 
 def test_slow_upload_408_and_part_removed(serve, pg, monkeypatch, tmp_path):

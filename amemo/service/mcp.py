@@ -201,11 +201,11 @@ class _Server(MCPServer):
         except ToolError as e:
             cause = e.__cause__
             if isinstance(cause, ValidationError):
-                fields = "; ".join(f"{'.'.join(str(p) for p in err['loc']) or '(аргументы)'}: {err['msg']}"
+                fields = "; ".join(f"{'.'.join(str(p) for p in err['loc']) or '(arguments)'}: {err['msg']}"
                                    for err in cause.errors(include_url=False, include_input=False))
-                return failure(api.BadRequest(f"{name}: неверные аргументы — {fields}"))
+                return failure(api.BadRequest(f"{name}: wrong arguments — {fields}"))
             if cause is None and self._tool_manager.get_tool(name) is None:
-                return failure(api.BadRequest(f"инструмента {name!r} нет: есть {', '.join(TOOLS)}"))
+                return failure(api.BadRequest(f"no tool {name!r}: there are {', '.join(TOOLS)}"))
             raise
 
 
@@ -564,7 +564,7 @@ class ServiceRuntime(Runtime):
         state = getattr(request, "scope", {}).get("state") or {}
         agent = state.get("mcp_agent")
         if agent is None:
-            raise _Refused(500, "internal", "запрос MCP без агента")
+            raise _Refused(500, "internal", "an MCP request without an agent")
         can_write = bool(state.get("can_write"))
         sid = request.headers.get(SESSION_HEADER)
         if sid:                    # чужому входу с этим id SDK уже ответил 404 (scope["user"], HttpMcp)
@@ -607,10 +607,11 @@ class HttpMcp:
             return token_model or self.settings.model_agent
         header = header.strip()
         if not settings_.MODEL.fullmatch(header):
-            return problems.Problem(400, "bad_agent", f"X-Amemo-Agent {header[:80]!r}: нужен model:<имя> (строчные "
-                                    f"латинские буквы, цифры, «_.-»); /mcp — всегда модель")
+            return problems.Problem(400, "bad_agent", f"X-Amemo-Agent {header[:80]!r}: model:<name> is required "
+                                    f"(lowercase Latin letters, digits, «_.-»); /mcp is always a model")
         if token_model is not None and header != token_model:
-            return problems.Problem(403, "forbidden", f"X-Amemo-Agent {header}: токен выдан агенту {token_model}")
+            return problems.Problem(403, "forbidden",
+                                    f"X-Amemo-Agent {header}: the token was issued to the agent {token_model}")
         return header
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -676,8 +677,8 @@ class StdioRuntime(Runtime):
             self.refresh_version()
         if self.new_version is None:
             return None
-        return (f"amemo обновлён ({self.baseline} → {self.new_version}) — перезапустите агента: этот процесс "
-                f"amemo mcp работает на прежнем коде и после этого ответа завершится")
+        return (f"amemo was updated ({self.baseline} → {self.new_version}) — restart the agent: this "
+                f"amemo mcp process runs the previous code and will exit after this answer")
 
     def finish(self) -> None:
         self.exiting = True
@@ -708,7 +709,7 @@ def open_stdio(settings: settings_.Settings, *, agent: str, provider=None, ready
     from .. import db
 
     if not settings_.MODEL.fullmatch(agent):
-        raise ValueError(f"агент MCP {agent!r}: нужен model:<имя>")
+        raise ValueError(f"MCP agent {agent!r}: model:<name> is required")
     pool = ConnectionPool(settings.dsn, kwargs={"autocommit": True}, min_size=STDIO_POOL[0], max_size=STDIO_POOL[1],
                           open=False, timeout=POOL_TIMEOUT, check=ConnectionPool.check_connection, name="amemo-mcp")
     pool.open(wait=True, timeout=OPEN_TIMEOUT)

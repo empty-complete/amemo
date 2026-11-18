@@ -292,7 +292,7 @@ def test_inspect_too_large_is_413_and_removed(start, kb, tmp_path, monkeypatch):
     client = start(person=True)
     monkeypatch.setattr(http_v1, "UPLOAD_LIMIT", 4096)
     body = problem(upload(client, b"z" * 20000), 413, "too_large", "/bundles/inspect", "post")
-    assert "МиБ" in body["detail"]
+    assert "MiB" in body["detail"]
     assert list((state_dir(tmp_path) / "uploads").iterdir()) == []          # недокачанное удалено
     # быстрый отказ по Content-Length — тело не читается
     monkeypatch.setattr(http_v1, "FORM_LIMIT", 0)
@@ -500,7 +500,7 @@ def test_held_file_survives_removal_after_open(serve, kb, tmp_path):
     file.write_bytes(b"0123456789" * 10000)
 
     def held(request):
-        handle = http_v1._hold(file, "файла")
+        handle = http_v1._hold(file, "file")
         file.unlink()                                          # очистка успела после открытия
         return http_v1.HeldFile(handle, media_type="application/zip", filename="held.zip")
 

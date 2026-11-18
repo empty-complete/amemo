@@ -90,11 +90,11 @@ class FileCopy(FileResponse):
         try:
             return super()._parse_range_header(http_range, file_size)
         except MalformedRangeHeader as e:
-            raise problems.Problem(400, "bad_request", f"заголовок Range {http_range[:80]!r}: {e.content}",
+            raise problems.Problem(400, "bad_request", f"the Range header {http_range[:80]!r}: {e.content}",
                                    headers=FILE_HEADERS) from None
         except RangeNotSatisfiable as e:
-            raise problems.Problem(416, "range_not_satisfiable", f"диапазон {http_range[:80]!r} вне файла "
-                                   f"({e.max_size} байт)", headers={**FILE_HEADERS,
+            raise problems.Problem(416, "range_not_satisfiable", f"the range {http_range[:80]!r} is outside the file "
+                                   f"({e.max_size} bytes)", headers={**FILE_HEADERS,
                                                                     "Content-Range": f"bytes */{e.max_size}"}) from None
 
 
@@ -267,11 +267,12 @@ def get_backups(request: Request) -> JSONResponse:
 # --- запись: тело и вызов операции ---
 
 def _too_large() -> problems.Problem:
-    return problems.Problem(413, "too_large", f"тело запроса больше {BODY_LIMIT // 1024} КиБ: разбейте пакет на части")
+    return problems.Problem(413, "too_large",
+                            f"the request body is over {BODY_LIMIT // 1024} KiB: split the batch into parts")
 
 
 def _constant(name: str):
-    raise ValueError(f"{name} — не число JSON")
+    raise ValueError(f"{name} is not a JSON number")
 
 
 def _body_timeout(detail: str) -> problems.Problem:
@@ -292,8 +293,8 @@ async def _stream(request: Request, *, total: float | None = None):
                 return
         if waiting.cancelled_caught:
             if deadline is not None and time.monotonic() >= deadline:
-                raise _body_timeout(f"тело запроса не пришло целиком за {total:g} с")
-            raise _body_timeout(f"тело запроса не приходит: {BODY_IDLE:g} с без новых данных")
+                raise _body_timeout(f"the request body did not arrive in full within {total:g} s")
+            raise _body_timeout(f"the request body does not arrive: {BODY_IDLE:g} s without new data")
         yield chunk
 
 
@@ -310,15 +311,15 @@ async def _body(request: Request) -> dict:
         chunks.append(chunk)
     raw = b"".join(chunks)
     if not raw.strip():
-        raise problems.Problem(400, "bad_request", "нужно тело запроса — JSON-объект")
+        raise problems.Problem(400, "bad_request", "a request body is required — a JSON object")
     try:
         body = json.loads(raw, parse_constant=_constant)
     except RecursionError:
-        raise problems.Problem(400, "bad_request", "тело JSON: слишком глубокая вложенность") from None
+        raise problems.Problem(400, "bad_request", "the JSON body is nested too deep") from None
     except ValueError as e:                       # и UnicodeDecodeError
-        raise problems.Problem(400, "bad_request", f"тело — не JSON: {e}") from None
+        raise problems.Problem(400, "bad_request", f"the body is not JSON: {e}") from None
     if not isinstance(body, dict):
-        raise problems.Problem(400, "bad_request", f"тело — не JSON-объект, а {type(body).__name__}")
+        raise problems.Problem(400, "bad_request", f"the body is not a JSON object but {type(body).__name__}")
     return body
 
 
@@ -411,7 +412,8 @@ async def rename_folder(request: Request) -> JSONResponse:
 async def move_record(request: Request) -> JSONResponse:
     body = await _body(request)
     if "folder" not in body:
-        raise problems.Problem(400, "bad_request", "тело: нужно поле folder — путь папки или null (без папки)")
+        raise problems.Problem(400, "bad_request",
+                               "body: the field folder is required — a folder path or null (no folder)")
     return JSONResponse(await _call(request, lambda conn: api.record_folder(
         conn, request.path_params["ref"], body["folder"], agent=request.state.agent)))
 
@@ -419,7 +421,8 @@ async def move_record(request: Request) -> JSONResponse:
 async def move_records(request: Request) -> JSONResponse:
     body = await _body(request)
     if "folder" not in body or "refs" not in body:
-        raise problems.Problem(400, "bad_request", "тело: нужны refs — список ссылок и folder — путь папки или null")
+        raise problems.Problem(400, "bad_request",
+                               "body: refs (a list of references) and folder (a folder path or null) are required")
     return JSONResponse(await _call(request, lambda conn: api.records_folder(
         conn, body["refs"], body["folder"], agent=request.state.agent)))
 
@@ -467,20 +470,20 @@ def _hold(path: Path, what: str):
     try:
         return open(path, "rb")
     except (FileNotFoundError, NotADirectoryError, IsADirectoryError):
-        raise api.Missing(f"{what} нет: срок хранения — сутки, после него сделайте заново") from None
+        raise api.Missing(f"the {what} is gone: it is kept for a day, make it again") from None
 
 
 def download_bundle(request: Request) -> FileResponse:
     found = api.bundle_download(request.app.state.settings.state, request.path_params["id"],
                                 owner=session.owner(request))
-    return HeldFile(_hold(found.path, "подборки"), media_type="application/zip", headers=FILE_HEADERS,
+    return HeldFile(_hold(found.path, "bundle"), media_type="application/zip", headers=FILE_HEADERS,
                     filename=found.filename, content_disposition_type="attachment")
 
 
 def bundle_report(request: Request) -> FileResponse:
     path = api.bundle_report(request.app.state.settings.state, request.path_params["id"],
                              owner=session.owner(request))
-    return HeldFile(_hold(path, "отчёта"), media_type="text/html; charset=utf-8", headers=REPORT_HEADERS)
+    return HeldFile(_hold(path, "report"), media_type="text/html; charset=utf-8", headers=REPORT_HEADERS)
 
 
 class _Upload:
@@ -488,8 +491,8 @@ class _Upload:
     прочие поля и заголовки частей — не больше FORM_LIMIT байт вместе (текст полей из keep сохраняется в fields);
     файл больше UPLOAD_LIMIT — 413, не дочитывая. filename — имя файла из заголовка части file."""
 
-    def __init__(self, path: Path, room: int | None = None, quota: int | None = None, *, what: str = "подборки",
-                 hint: str = "нужно одно поле file с zip подборки", keep: tuple[bytes, ...] = ()):
+    def __init__(self, path: Path, room: int | None = None, quota: int | None = None, *, what: str = "bundle",
+                 hint: str = "one field file with the bundle zip is required", keep: tuple[bytes, ...] = ()):
         self.path, self.out, self.keep = path, None, keep
         self.room, self.quota = room, quota        # остаток места владельца (AMEMO_STATE_QUOTA) и сам предел
         self.what, self.hint = what, hint
@@ -510,8 +513,8 @@ class _Upload:
     def _count_form(self, n: int) -> None:
         self.form += n
         if self.form > FORM_LIMIT:
-            raise problems.Problem(413, "too_large", f"поля формы загрузки больше {FORM_LIMIT // 1024} КиБ: "
-                                   f"{self.hint}")
+            raise problems.Problem(413, "too_large",
+                                   f"the fields of the upload form are over {FORM_LIMIT // 1024} KiB: {self.hint}")
 
     def part_begin(self) -> None:
         self.disposition, self.in_file, self.name = b"", False, None
@@ -535,11 +538,12 @@ class _Upload:
         if name != b"file":
             if name in self.keep:                 # прочие поля читаются (в пределе FORM_LIMIT) и не нужны
                 if name in self.fields:
-                    raise problems.Problem(400, "bad_request", f"загрузка {self.what}: поле {name.decode()} — одно")
+                    raise problems.Problem(400, "bad_request",
+                                           f"{self.what} upload: the field {name.decode()} must be single")
                 self.name, self.fields[name] = name, b""
             return
         if self.got_file:
-            raise problems.Problem(400, "bad_request", f"загрузка {self.what}: поле file — одно")
+            raise problems.Problem(400, "bad_request", f"{self.what} upload: the field file must be single")
         self.got_file = self.in_file = True
         self.filename = options.get(b"filename")
         self.out = open(self.path, "xb")
@@ -554,7 +558,7 @@ class _Upload:
         if self.size > UPLOAD_LIMIT:
             raise _upload_too_large(self.what)
         if self.room is not None and self.size > self.room:
-            raise api.quota_exceeded(self.quota - self.room, self.quota, f"загрузка {self.what}")
+            raise api.quota_exceeded(self.quota - self.room, self.quota, f"{self.what} upload")
         self.out.write(data[start:end])
 
     def part_end(self) -> None:
@@ -578,15 +582,15 @@ class _Upload:
         try:
             return raw.decode("utf-8")
         except UnicodeDecodeError:
-            raise problems.Problem(400, "bad_request", f"загрузка {self.what}: поле {name.decode()} — не UTF-8") \
+            raise problems.Problem(400, "bad_request", f"{self.what} upload: the field {name.decode()} is not UTF-8") \
                 from None
 
 
-def _upload_too_large(what: str = "подборки") -> problems.Problem:
-    if what == "подборки":
-        return problems.Problem(413, "too_large", f"файл подборки больше {UPLOAD_LIMIT // (1 << 20)} МиБ — "
-                                f"предел распаковки подборки")
-    return problems.Problem(413, "too_large", f"файл больше {UPLOAD_LIMIT // (1 << 20)} МиБ — предел загрузки")
+def _upload_too_large(what: str = "bundle") -> problems.Problem:
+    if what == "bundle":
+        return problems.Problem(413, "too_large", f"the bundle file is over {UPLOAD_LIMIT // (1 << 20)} MiB — "
+                                f"the limit for unpacking a bundle")
+    return problems.Problem(413, "too_large", f"the file is over {UPLOAD_LIMIT // (1 << 20)} MiB — the upload limit")
 
 
 def _boundary(request: Request, what: str) -> bytes:
@@ -594,7 +598,7 @@ def _boundary(request: Request, what: str) -> bytes:
     _, params = parse_options_header(request.headers.get("content-type"))
     boundary = params.get(b"boundary")
     if not boundary:
-        raise problems.Problem(400, "bad_request", f"загрузка {what}: в Content-Type нет boundary")
+        raise problems.Problem(400, "bad_request", f"{what} upload: Content-Type has no boundary")
     length = request.headers.get("content-length", "").strip()
     if length.isascii() and length.isdigit() and (len(length) > 18 or int(length) > UPLOAD_LIMIT + FORM_LIMIT):
         raise _upload_too_large(what)
@@ -618,14 +622,15 @@ async def _receive(request: Request, boundary: bytes, upload: _Upload) -> None:
                     raise _upload_too_large(upload.what)
             parser.finalize()
         except MultipartParseError as e:
-            raise problems.Problem(400, "bad_request", f"загрузка {upload.what}: тело — не multipart/form-data: "
+            raise problems.Problem(400, "bad_request", f"{upload.what} upload: the body is not multipart/form-data: "
                                    f"{e}") from None
         finally:
             upload.close()
         if not upload.got_file:
-            raise problems.Problem(400, "bad_request", f"загрузка {upload.what}: {upload.hint}")
+            raise problems.Problem(400, "bad_request", f"{upload.what} upload: {upload.hint}")
         if not (upload.file_done and upload.ended):
-            raise problems.Problem(400, "bad_request", f"загрузка {upload.what}: тело оборвано до конца файла")
+            raise problems.Problem(400, "bad_request",
+                                   f"{upload.what} upload: the body was cut before the end of the file")
     except BaseException:
         upload.path.unlink(missing_ok=True)
         raise
@@ -635,7 +640,7 @@ async def inspect_bundle(request: Request) -> JSONResponse:
     """Загрузка подборки (Origin обязателен — проверяет session.Guard): файл — потоком во временный файл
     в AMEMO_STATE/uploads, сверх UPLOAD_LIMIT — 413 и недокачанное удаляется; затем bundle.inspect без базы.
     Заметки Markdown (.md или zip хранилища Obsidian) — тем же путём: отчёт notes_md.inspect."""
-    boundary = _boundary(request, "подборки")
+    boundary = _boundary(request, "bundle")
     settings = request.app.state.settings
     state, quota, owner = settings.state, settings.state_quota, session.owner(request)
     room = await run_in_threadpool(api.upload_room, state, owner, quota)
@@ -651,11 +656,12 @@ async def upload_object(request: Request) -> JSONResponse:
     """Загрузка файла в папку документов (Origin обязателен — session.Guard; разд. 6a.4): поле file — потоком во
     временный файл в корне AMEMO_DOCS (тот же предел UPLOAD_LIMIT, квота AMEMO_STATE_QUOTA не тратится), поле path —
     путь в папке документов (иначе Загрузки/<имя>); затем api.object_upload: 201 — записан, 200 — уже лежал."""
-    boundary = _boundary(request, "файла")
+    boundary = _boundary(request, "file")
     docs = request.app.state.settings.docs
     part = await run_in_threadpool(api.object_upload_begin, docs)
-    upload = _Upload(part, what="файла", keep=(b"path",),
-                     hint="нужно поле file с файлом (и, если нужно, path — путь в папке документов)")
+    upload = _Upload(part, what="file", keep=(b"path",),
+                     hint="the field file with the file is required (and, if needed, path — a path in the "
+                          "documents folder)")
     await _receive(request, boundary, upload)
     try:
         filename, path = (upload.filename or b"").decode("utf-8", "replace") or None, upload.text(b"path")
@@ -696,9 +702,9 @@ def _person_writer(request: Request, what: str) -> None:
     """Обновлением управляет только человек с правом записи: модель — 403 forbidden (токен только для чтения
     session.Guard отвергает раньше — 403 read_only)."""
     if not request.state.agent.startswith("person:"):
-        raise api.Forbidden(f"{what} только человек (person:), а не {request.state.agent}")
+        raise api.Forbidden(f"only a person (person:) {what}, not {request.state.agent}")
     if not request.state.can_write:
-        raise api.ReadOnly(f"вход {request.state.agent} — только для чтения")
+        raise api.ReadOnly(f"the login {request.state.agent} is read-only")
 
 
 def get_updates(request: Request) -> JSONResponse:
@@ -706,10 +712,10 @@ def get_updates(request: Request) -> JSONResponse:
 
 
 async def put_updates(request: Request) -> JSONResponse:
-    _person_writer(request, "автообновление включает и выключает")
+    _person_writer(request, "switches automatic updates on and off")
     body = await _body(request)
     if not isinstance(body.get("auto"), bool) or set(body) != {"auto"}:
-        raise problems.Problem(400, "bad_request", "тело: нужно только поле auto — true или false")
+        raise problems.Problem(400, "bad_request", "body: only the field auto is required — true or false")
     return JSONResponse(await run_in_threadpool(request.app.state.updates.set_auto, body["auto"]))
 
 
@@ -718,7 +724,7 @@ def check_updates(request: Request) -> JSONResponse:
 
 
 def install_update(request: Request) -> JSONResponse:
-    _person_writer(request, "обновление ставит")
+    _person_writer(request, "installs an update")
     return JSONResponse(request.app.state.updates.start_install(), status_code=202)
 
 

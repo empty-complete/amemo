@@ -43,7 +43,7 @@ LOCAL_HOSTS = ("127.0.0.1", "localhost", "[::1]")
 WILDCARD_HOSTS = frozenset({"0.0.0.0", "::", "[::]", ""})      # адрес «на всех интерфейсах» — не имя службы
 API_PREFIX = "/api/v1/"
 INSPECT = "/api/v1/bundles/inspect"
-UPLOADS = {INSPECT: "загрузка подборки", "/api/v1/objects": "загрузка файла"}    # POST multipart с Origin
+UPLOADS = {INSPECT: "bundle upload", "/api/v1/objects": "file upload"}    # POST multipart с Origin
 PUBLIC = frozenset({"/health"})          # без входа и в общей службе: проверка живости для compose и мониторинга
 UI_PUBLIC = ("/", "/ui")                 # статика интерфейса без входа и в общей службе; API за ней — по токену
 # подборки по токену только для чтения: экспорт и проверка загрузки ничего не пишут в базу, импорт — пробный
@@ -135,29 +135,30 @@ class Guard:
         method, path = scope["method"], scope["path"]
         host = headers.get("host")
         if host is None or hostname(host) not in self.hosts:
-            return problems.response(421, "bad_host", f"служба не отвечает на адрес {host!r}: допустимы "
-                                     f"{', '.join(sorted(self.hosts))} (защита от подмены DNS)")
+            return problems.response(421, "bad_host", f"the service does not answer to the address {host!r}: allowed "
+                                     f"are {', '.join(sorted(self.hosts))} (a guard against DNS rebinding)")
         origin = headers.get("origin")
         if origin is not None and not self._own_origin(origin, scope, host):
-            return problems.response(403, "bad_origin", f"запрос со страницы {origin!r}: служба принимает только свой "
-                                     f"источник и AMEMO_UI_ORIGINS")
+            return problems.response(403, "bad_origin", f"a request from the page {origin!r}: the service accepts "
+                                     f"only its own origin and AMEMO_UI_ORIGINS")
         site = headers.get("sec-fetch-site", "").strip().lower()
         if origin is None and site in FOREIGN_SITES and path not in PUBLIC \
                 and (method in WRITE_METHODS or path.startswith(API_PREFIX) or path == MCP):
-            return problems.response(403, "bad_origin", f"запрос с чужой страницы (Sec-Fetch-Site: {site}) без Origin: "
-                                     "служба отвечает только своей странице и AMEMO_UI_ORIGINS")
+            return problems.response(403, "bad_origin", f"a request from a foreign page (Sec-Fetch-Site: {site}) "
+                                     "without Origin: the service answers only its own page and AMEMO_UI_ORIGINS")
         if method in WRITE_METHODS:
             media = headers.get("content-type", "").partition(";")[0].strip().lower()
             if path in UPLOADS and method == "POST":
                 if origin is None:
-                    return problems.response(403, "bad_origin", f"{UPLOADS[path]}: нужен заголовок Origin "
-                                             "(запрос со страницы интерфейса)")
+                    return problems.response(403, "bad_origin", f"{UPLOADS[path]}: the Origin header is required "
+                                             "(a request from the interface page)")
                 if media != "multipart/form-data":
                     return problems.response(415, "unsupported_media_type",
-                                             f"{UPLOADS[path]}: нужен multipart/form-data")
+                                             f"{UPLOADS[path]}: multipart/form-data is required")
             elif (media or _has_body(headers)) and media != "application/json":
                 return problems.response(415, "unsupported_media_type",
-                                         f"запись принимает только application/json, а не {media or 'тело без типа'}")
+                                         "writing accepts only application/json, not "
+                                         f"{media or 'a body without a type'}")
         state = scope.setdefault("state", {})
         if self.tokens is not None:
             if path in PUBLIC or (method not in WRITE_METHODS and _ui_path(path)):
@@ -166,10 +167,11 @@ class Guard:
             scheme, _, token = headers.get("authorization", "").partition(" ")
             entry = settings_.match_token(self.tokens, token.strip()) if scheme.lower() == "bearer" and token else None
             if entry is None:
-                detail = "нужен вход: заголовок Authorization: Bearer <токен>" if not token else "токен не подошёл"
+                detail = ("sign-in is required: the header Authorization: Bearer <token>" if not token
+                          else "the token did not match")
                 return problems.response(401, "auth_required", detail, headers={"WWW-Authenticate": "Bearer"})
             if method in WRITE_METHODS and not entry.write and path not in READ_ONLY_POSTS and path != MCP:
-                return problems.response(403, "read_only", f"токен {entry.agent} — только для чтения")
+                return problems.response(403, "read_only", f"the token of {entry.agent} is read-only")
             state.update(agent=entry.agent, can_write=entry.write, grant_agent=None, token=entry.hash)
             return None
         cookie = HTTPConnection(scope).cookies.get(COOKIE)

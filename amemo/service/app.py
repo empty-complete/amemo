@@ -54,7 +54,7 @@ def create_app(settings: Settings, *, provider: embed.EmbeddingProvider | None =
     обновления (None — по виду установки этого процесса), update_loop — фоновая проверка и перезапуск (тесты
     выключают её, чтобы звать шаги сами); embed_loop — фоновое досчитывание векторов (embed.keep)."""
     if not settings.dsn:
-        raise SettingsError("база не задана: задайте AMEMO_DSN (или dsn в amemo.toml) и выполните amemo init")
+        raise SettingsError("the database is not set: set AMEMO_DSN (or dsn in amemo.toml) and run amemo init")
     tokens = load_tokens(settings.tokens) if settings.tokens is not None else None
 
     from . import mcp as mcp_

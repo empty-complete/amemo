@@ -41,19 +41,21 @@ def exposure(settings: Settings, *, no_auth: bool = False) -> str | None:
     Exposed."""
     if settings.tokens is not None:
         if no_auth:
-            return "--no-auth не действует: задан AMEMO_TOKENS — вход по токенам"
+            return "--no-auth has no effect: AMEMO_TOKENS is set — sign-in is by tokens"
         return None
     if loopback(settings.host):
         if no_auth:
-            return (f"--no-auth: служба на {settings.host} и так без входа — она доступна только с этой машины")
+            return (f"--no-auth: the service on {settings.host} needs no sign-in anyway — it is reachable only from "
+                    f"this machine")
         return None
     if not no_auth:
-        raise Exposed(f"служба на {settings.host}:{settings.port} была бы доступна из сети без входа: любой запрос "
-                      f"без cookie пишет как модель. Задайте AMEMO_TOKENS (файл токенов: amemo token create) или, "
-                      f"если сеть закрыта (например, внутри compose), запустите с --no-auth")
-    return (f"ВНИМАНИЕ: служба слушает {settings.host}:{settings.port} БЕЗ ВХОДА (--no-auth). Любой, кто достучится "
-            f"до порта, читает базу и пишет в неё как модель {settings.model_agent}. Держите порт закрытым "
-            f"(compose: наружу только 127.0.0.1) или задайте AMEMO_TOKENS")
+        raise Exposed(f"the service on {settings.host}:{settings.port} would be reachable from the network without "
+                      f"sign-in: any request without a cookie writes as a model. Set AMEMO_TOKENS (the tokens file: "
+                      f"amemo token create) or, "
+                      f"if the network is closed (for example inside compose), start with --no-auth")
+    return (f"WARNING: the service listens on {settings.host}:{settings.port} WITHOUT SIGN-IN (--no-auth). Anyone who "
+            f"reaches the port reads the base and writes to it as the model {settings.model_agent}. Keep the port "
+            f"closed (compose: only 127.0.0.1 outside) or set AMEMO_TOKENS")
 
 
 def serve(settings: Settings, *, no_auth: bool = False, provider=None, log_level: str = "info",
@@ -101,7 +103,7 @@ def main(argv: Sequence[str] | None = None, *, env: Mapping[str, str] | None = N
         settings = settings_.load(env, host=args.host, port=args.port)
         if args.check:
             if not settings.dsn:
-                raise SettingsError("база не задана: задайте AMEMO_DSN (или dsn в amemo.toml)")
+                raise SettingsError("the database is not set: set AMEMO_DSN (or dsn in amemo.toml)")
             from .. import updates
 
             return updates.run_check(settings)
