@@ -463,15 +463,15 @@ def test_resubmitted_pending_body_gives_no_new_revision(kb):
 @pytest.mark.parametrize("bundle, message", [
     (lambda: ([Item("atom", fact(about=["ent:nope"], sources=[]))], []), r"@w0: about\[0\]: ent:nope"),
     (lambda: ([Item("entity", edition(start="2020-01-01", end="2019-01-01", of="ent:sp20_13330"))], []),
-     "valid_from 2020-01-01 позже valid_to 2019-01-01"),
+     "valid_from 2020-01-01 is later than valid_to 2019-01-01"),
     (lambda: ([Item("entity", {"entity_class": "document", "key": "sp22", "label": {"ru": "СП 22"}}),
                Item("atom", {k: v for k, v in fact(key="z", about=["ent:nope"], sources=[]).items() if k != "ref"})],
               []), r"items\[1\]: about\[0\]: ent:nope"),
     (lambda: ([], [{"rel": "supersedes", "src": "ent:sp20_13330_2016", "dst": "ent:sp20_13330"},
                    {"rel": "attached_by", "src": "ent:sp20_13330", "dst": "ent:sp20_13330_2016"}]),
-     r"links\[1\]: неизвестный вид связи 'attached_by'"),
+     r"links\[1\]: unknown link type 'attached_by'"),
     (lambda: ([], [{"rel": "about", "src": "ent:sp20_13330", "dst": "ent:sp20_13330_2016"}]),
-     r"links\[0\]: связь about задаётся полем about"),
+     r"links\[0\]: the link about is set by the atom field about"),
 ], ids=["путь ссылки", "срок задом наперёд", "запись без ref", "неизвестная связь", "about связью"])
 def test_errors_name_the_place(kb, bundle, message):
     base(kb)

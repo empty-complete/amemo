@@ -427,7 +427,7 @@ def test_object_functions_take_obj_ref(kb, docs, store):
     (lambda kb, oid: objects.mark(kb, oid, "разобран", agent=AGENT), "нужен один из parsed, partial, skipped"),
     (lambda kb, oid: objects.mark(kb, "01929f3a-7c4e-7b21-9a6f-3d2c8e1f0a55", "parsed", agent=AGENT),
      "такого объекта нет"),
-    (lambda kb, oid: objects.mark(kb, "не uuid", "parsed", agent=AGENT), "это не UUID"),
+    (lambda kb, oid: objects.mark(kb, "не uuid", "parsed", agent=AGENT), "not a UUID"),
 ], ids=["статус", "нет объекта", "не UUID"])
 def test_mark_errors(kb, docs, store, call, message):
     version = objects.ingest(kb, store, docs, PDF, agent=AGENT)
