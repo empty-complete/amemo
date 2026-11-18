@@ -90,7 +90,7 @@ def test_unresolved_path(kb, store, docs):
     check, issues, _, report = one(kb, store, docs, atom("@a", sources=[source_md("НД/нет.pdf")]))
     assert issues == [("source_unresolved", "violation", "@a: sources[0]")]
     assert check.verdict is None
-    assert "файла нет" in l2(report, "source_unresolved")[0].message
+    assert "no such file" in l2(report, "source_unresolved")[0].message
 
 
 def test_two_bad_sources_two_issues(kb, store, docs):

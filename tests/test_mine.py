@@ -268,7 +268,7 @@ def test_file_pack_losing_a_property_of_my_kind_is_refused(kb, tmp_path, monkeyp
     """Из пакета-файла исчезла величина, на которую ссылается свой вид: понятная ошибка с кодом вида."""
     mine.put(kb, "weighing", draft(), agent=PERSON)
     monkeypatch.setenv("AMEMO_PACKS", str(_pack_copy(tmp_path, PACKS / "quantities", "1.0.1", "mass")))
-    with pytest.raises(db.MigrationError, match="свой вид weighing") as e:
+    with pytest.raises(db.MigrationError, match="own kind weighing") as e:
         db.prepare(kb)
     assert "mass" in str(e.value)
     # всё откатилось: величина и свой вид на месте
@@ -284,7 +284,7 @@ def test_file_pack_losing_a_class_of_my_kind_is_refused(kb, tmp_path, monkeypatc
              "accepts": {"entity_classes": ["sensor"], "kinds": []}}]
     mine.put(kb, "gauge_reading", draft(form=form), agent=PERSON)
     monkeypatch.setenv("AMEMO_PACKS", str(PACKS / "quantities"))
-    with pytest.raises(db.MigrationError, match="свой вид gauge_reading") as e:
+    with pytest.raises(db.MigrationError, match="own kind gauge_reading") as e:
         db.prepare(kb)
     assert "sensor" in str(e.value)
     assert kb.execute("SELECT origin FROM concept WHERE scheme = 'entity_class' AND code = 'sensor'").fetchone() == (

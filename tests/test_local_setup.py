@@ -95,7 +95,7 @@ def test_native_paths_for_postgresql_on_windows(monkeypatch, tmp_path):
     monkeypatch.setattr(localpg, "_short", lambda text: "C:\\Users\\ANNA~1\\AMEMO-~1")
     assert localpg.native(Path("C:/Users/Анна/amemo-data")) == "C:\\Users\\ANNA~1\\AMEMO-~1"
     monkeypatch.setattr(localpg, "_short", lambda text: None)
-    with pytest.raises(localpg.LocalPgError, match="латинскими"):
+    with pytest.raises(localpg.LocalPgError, match="Latin letters"):
         localpg.native(Path("C:/Users/Анна/amemo-data"))
 
 
@@ -162,7 +162,7 @@ def test_old_postgresql_is_refused(run, tmp_path):
                        "--json")
     assert code == 1, err
     problem = json.loads(out)
-    assert problem["code"] == "pg_bin" and "PostgreSQL 16" in problem["detail"] and "нужен 18" in problem["detail"]
+    assert problem["code"] == "pg_bin" and "PostgreSQL 16" in problem["detail"] and "18 or newer" in problem["detail"]
 
 
 @posix_only

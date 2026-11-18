@@ -97,8 +97,8 @@ def test_file_returned_to_old_content_reuses_old_version(kb, docs, store):
 
 
 @pytest.mark.parametrize("path, message", [
-    ("НД/нет такого.pdf", "файла нет в папке документов"), ("../outside.pdf", "«..» в пути не допускается"),
-    ("НД", "файла нет в папке документов")], ids=["нет файла", "наружу", "папка"])
+    ("НД/нет такого.pdf", "no such file in the documents folder"), ("../outside.pdf", "«..» is not allowed in a path"),
+    ("НД", "no such file in the documents folder")], ids=["нет файла", "наружу", "папка"])
 def test_missing_or_outside_file_rejected(kb, docs, store, path, message):
     (docs.parent / "outside.pdf").write_bytes(b"%PDF")
     with pytest.raises(ObjectError, match=message):
@@ -133,9 +133,9 @@ def test_missing_store_with_files_in_db_is_refused(kb, docs, store):
     иначе копии новых файлов ушли бы в пустую папку, а старые файлы второй раз уже не скопировались бы."""
     objects.ingest(kb, store, docs, PDF, agent=AGENT)
     shutil.rmtree(store.root)
-    with pytest.raises(StoreError, match="корня хранилища нет"):
+    with pytest.raises(StoreError, match="no store root"):
         objects.ingest(kb, store, docs, "Заметки/узел.md", agent=AGENT)
-    with pytest.raises(StoreError, match=r"sources\[0\]: .*: корня хранилища нет"):      # сбой сервера, не данных
+    with pytest.raises(StoreError, match=r"sources\[0\]: .*: no store root"):      # сбой сервера, не данных
         objects.resolve_sources(kb, store, docs, {"sources": [{"path": "Заметки/узел.md"}]}, agent=AGENT)
     assert kb.execute("SELECT count(*) FROM object").fetchone()[0] == 1 and not store.root.exists()
 
@@ -186,9 +186,9 @@ def test_web_and_message_have_one_version_without_file(kb, monkeypatch):
     model_v1.ObjectRecord.model_validate_json(json.dumps(record), strict=True)
     assert record["url"] == "https://example.org/catalog/item-1" and record["retrieved_at"] == "2026-01-02"
     assert record["versions"] == [{"n": 1, "recorded_at": record["versions"][0]["recorded_at"]}]
-    with pytest.raises(ObjectError, match="пустой"):
+    with pytest.raises(ObjectError, match="empty"):
         objects.message(kb, "  ")
-    with pytest.raises(ObjectError, match="символ NUL"):
+    with pytest.raises(ObjectError, match="NUL character"):
         objects.web(kb, "https://example.org/\x00")
     assert kb.execute("SELECT count(*) FROM object").fetchone()[0] == 2
 
@@ -237,17 +237,17 @@ def test_resolve_sources_fills_object_version_and_digest(kb, docs, store):
 
 
 @pytest.mark.parametrize("path, message", [
-    ("НД/СП 99", "файла нет в папке документов — возможно, «НД/СП 99.pdf»?"),
-    ("НД", "это папка, а не файл"),
-    ("НД/СП 20.13330.2016", "файла нет в папке документов"),
-    ("example.org", "похоже на адрес сайта — укажите его со схемой: https://example.org"),
-    ("НД/Архив/СП 99", "файла нет в папке документов"),
-    ("Йод/Письмо", "файла нет в папке документов"),
-    ("Йод", "это папка, а не файл"),
-    ("example.net/каталог", "файла нет в папке документов"),
-    ("example.net", "это папка, а не файл"),
-    ("manual.final", "файла нет в папке документов — возможно, «manual.final.pdf»?"),
-    ("НД/../НД/СП 99.pdf", "«..» в пути не допускается"),
+    ("НД/СП 99", "no such file in the documents folder — maybe «НД/СП 99.pdf»?"),
+    ("НД", "this is a folder, not a file"),
+    ("НД/СП 20.13330.2016", "no such file in the documents folder"),
+    ("example.org", "looks like a web address — give it with the scheme: https://example.org"),
+    ("НД/Архив/СП 99", "no such file in the documents folder"),
+    ("Йод/Письмо", "no such file in the documents folder"),
+    ("Йод", "this is a folder, not a file"),
+    ("example.net/каталог", "no such file in the documents folder"),
+    ("example.net", "this is a folder, not a file"),
+    ("manual.final", "no such file in the documents folder — maybe «manual.final.pdf»?"),
+    ("НД/../НД/СП 99.pdf", "«..» is not allowed in a path"),
 ], ids=["без расширения", "папка", "точки в имени", "домен без схемы", "глубже существующей папки", "папка в NFD",
         "папка в NFD целиком", "папка с именем сайта", "папка с именем сайта целиком", "расширение раньше домена",
         "выход выше"])
@@ -268,7 +268,7 @@ def test_path_forms(kb, docs, store):
     к тому же объекту."""
     first = objects.ingest(kb, store, docs, PDF.replace("/", "\\"), agent=AGENT)
     assert lookup.object_by_path(kb, PDF) == first.ref == lookup.object_by_path(kb, PDF.replace("/", "\\"))
-    with pytest.raises(ObjectError, match="нужен путь от корня папки документов"):
+    with pytest.raises(ObjectError, match="a path from the root of the documents folder is required"):
         objects.ingest(kb, store, docs, str(docs / PDF), agent=AGENT)
     (docs / "Ссылки").mkdir()
     (docs / "Ссылки" / "СП.pdf").symlink_to(docs / PDF)
@@ -280,7 +280,7 @@ def test_path_forms(kb, docs, store):
         assert (again.object_id, again.created) == (first.object_id, False)
     assert lookup.get_object(kb, first.ref)["logical_paths"] == [PDF, "Ссылки/СП.pdf"]
     for outside in ("../docs/" + PDF, "НД/../НД/СП 99.pdf"):         # «..» не даёт ключа выше корня
-        with pytest.raises(ObjectError, match="«..» в пути не допускается"):
+        with pytest.raises(ObjectError, match="«..» is not allowed in a path"):
             objects.ingest(kb, store, docs, outside, agent=AGENT)
 
 
@@ -308,7 +308,7 @@ def test_nfd_file_name(kb, docs, store):
 def test_unreadable_file_is_an_object_error(kb, docs, store):
     (docs / "Заметки" / "узел.md").chmod(0)
     try:
-        with pytest.raises(ObjectError, match=r"sources\[0\]: Заметки/узел.md: файл не читается"):
+        with pytest.raises(ObjectError, match=r"sources\[0\]: Заметки/узел.md: the file is not readable"):
             objects.resolve_sources(kb, store, docs, {"sources": [{"path": "Заметки/узел.md"}]}, agent=AGENT)
     finally:
         (docs / "Заметки" / "узел.md").chmod(0o644)
@@ -316,7 +316,7 @@ def test_unreadable_file_is_an_object_error(kb, docs, store):
 
 def test_resolve_sources_names_the_failing_source(kb, docs, store):
     payload = {"kind": "fact", "label": {"ru": "Факт"}, "sources": [{"path": PDF}, {"path": "НД/нет такого.pdf"}]}
-    with pytest.raises(ObjectError, match=r"sources\[1\]: НД/нет такого.pdf: файла нет"):
+    with pytest.raises(ObjectError, match=r"sources\[1\]: НД/нет такого.pdf: no such file"):
         objects.resolve_sources(kb, store, docs, payload, agent=AGENT)
 
 
@@ -369,7 +369,7 @@ def test_text_is_nfc_and_missing_text_is_cached(kb, docs, store, monkeypatch):
     nul = objects.ingest(kb, store, docs, "Заметки/nul.md", agent=AGENT)
     assert objects.text(kb, store, nul.object_id, 1) == ["\u00e9 и ab"]
     assert objects.text(kb, store, objects.web(kb, "https://example.org/").object_id, 1) is None
-    with pytest.raises(ObjectError, match="нет версии 2") as e:
+    with pytest.raises(ObjectError, match="no version 2") as e:
         objects.text(kb, store, note.object_id, 2)
     assert e.value.code == "not_found"
 
@@ -424,23 +424,23 @@ def test_object_functions_take_obj_ref(kb, docs, store):
 
 
 @pytest.mark.parametrize("call, message", [
-    (lambda kb, oid: objects.mark(kb, oid, "разобран", agent=AGENT), "нужен один из parsed, partial, skipped"),
+    (lambda kb, oid: objects.mark(kb, oid, "разобран", agent=AGENT), "one of parsed, partial, skipped is required"),
     (lambda kb, oid: objects.mark(kb, "01929f3a-7c4e-7b21-9a6f-3d2c8e1f0a55", "parsed", agent=AGENT),
-     "такого объекта нет"),
+     "no such object"),
     (lambda kb, oid: objects.mark(kb, "не uuid", "parsed", agent=AGENT), "not a UUID"),
 ], ids=["статус", "нет объекта", "не UUID"])
 def test_mark_errors(kb, docs, store, call, message):
     version = objects.ingest(kb, store, docs, PDF, agent=AGENT)
     with pytest.raises((ObjectError, ValueError), match=message) as e:
         call(kb, version.object_id)
-    assert getattr(e.value, "code", None) == ("not_found" if message == "такого объекта нет" else None)
+    assert getattr(e.value, "code", None) == ("not_found" if message == "no such object" else None)
 
 
 @pytest.mark.parametrize("agent", ["claude", "Model:Claude", "person:", "model:клод", "model:a b", None])
 def test_bad_agent_is_object_error(kb, docs, store, agent):
     """Агент пишется в базу: неверный формат — ObjectError до любой записи, а не сбой ограничения agent."""
-    with pytest.raises(objects.ObjectError, match="person:<имя> или model:<имя>"):
+    with pytest.raises(objects.ObjectError, match="person:<name> or model:<name>"):
         objects.ingest(kb, store, docs, "Заметки/узел.md", agent=agent)
-    with pytest.raises(objects.ObjectError, match="person:<имя> или model:<имя>"):
+    with pytest.raises(objects.ObjectError, match="person:<name> or model:<name>"):
         objects.resolve_sources(kb, store, docs, {"sources": [{"path": "Заметки/узел.md"}]}, agent=agent)
     assert kb.execute("SELECT count(*) FROM object").fetchone()[0] == 0

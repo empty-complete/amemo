@@ -302,10 +302,10 @@ def test_source_on_old_object_version_is_queued(kb, store, docs):
 
 def test_store_error_is_raised_and_nothing_is_written(kb, store, docs, monkeypatch):
     def broken(*args, **kwargs):
-        raise StoreError("корня хранилища нет")
+        raise StoreError("no store root")
 
     monkeypatch.setattr(objects, "resolve_sources", broken)
-    with pytest.raises(StoreError, match="корня"):
+    with pytest.raises(StoreError, match="store root"):
         send(kb, store, docs, wind())
     assert kb.execute("SELECT count(*) FROM changeset").fetchone()[0] == 0
     assert kb.execute("SELECT count(*) FROM atom").fetchone()[0] == 0

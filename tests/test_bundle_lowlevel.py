@@ -89,9 +89,9 @@ def test_adopt_object_with_versions_and_file(pg, store, tmp_path):
     assert objects.adopt(pg, store, record, files={}, agent=AGENT) == []          # повтор — ничего не меняет
     assert store.head(oid) == 1 and lookup.get_object(pg, oid) == got
     bad = _record(oid, (1, "sha256:" + "0" * 64, 5))
-    with pytest.raises(objects.ObjectError, match="digest версии 1 не совпадает"):
+    with pytest.raises(objects.ObjectError, match="the digest of version 1 does not match"):
         objects.adopt(pg, store, bad, files={}, agent=AGENT)
-    with pytest.raises(objects.ObjectError, match="вид file, в подборке web"):
+    with pytest.raises(objects.ObjectError, match="the kind is file, in the bundle web"):
         objects.adopt(pg, store, {**record, "kind": "web"}, files={}, agent=AGENT)
 
 
@@ -118,9 +118,9 @@ def test_adopt_refuses_digest_of_other_object_and_bad_agent(pg, store, tmp_path)
     _, digest = _file(tmp_path, "a.txt", b"same")
     first = uuid7()
     objects.adopt(pg, store, _record(first, (1, digest, 4)), files={}, agent=AGENT)
-    with pytest.raises(objects.ObjectError, match="digest .* уже у объекта"):
+    with pytest.raises(objects.ObjectError, match="digest .* already belongs to the object"):
         objects.adopt(pg, store, {**_record(uuid7(), (1, digest, 4)), "logical_paths": []}, files={}, agent=AGENT)
-    with pytest.raises(objects.ObjectError, match="агент"):
+    with pytest.raises(objects.ObjectError, match="agent"):
         objects.adopt(pg, store, _record(uuid7(), (1, digest, 4)), files={}, agent="alice")
     assert pg.execute("SELECT count(*) FROM object").fetchone()[0] == 1
 
@@ -212,11 +212,11 @@ def test_adopt_checks_paths_numbers_and_id(pg, store, tmp_path):
     db.prepare(pg)
     _, digest = _file(tmp_path, "a.txt", b"a")
     for path in ("/etc/a.txt", "../a.txt", "notes/../../a.txt"):
-        with pytest.raises(objects.ObjectError, match="путь|«..»"):
+        with pytest.raises(objects.ObjectError, match="path|«..»"):
             objects.adopt(pg, store, {**_record(uuid7(), (1, digest, 1)), "logical_paths": [path]}, files={},
                           agent=AGENT)
     for n in ("1", None, 0, True):
-        with pytest.raises(objects.ObjectError, match="номер версии"):
+        with pytest.raises(objects.ObjectError, match="version number"):
             objects.adopt(pg, store, _record(uuid7(), (n, digest, 1)), files={}, agent=AGENT)
     with pytest.raises(objects.ObjectError, match="UUID"):
         objects.adopt(pg, store, _record("не-uuid", (1, digest, 1)), files={}, agent=AGENT)

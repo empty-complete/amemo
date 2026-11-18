@@ -71,21 +71,21 @@ def connect(dsn: str, **kwargs) -> psycopg.Connection:
 
 def require_autocommit(conn: psycopg.Connection) -> None:
     if not conn.autocommit:
-        raise MigrationError("нужно соединение с autocommit=True (db.connect): иначе записи не фиксируются")
+        raise MigrationError("a connection with autocommit=True is required (db.connect): otherwise writes are not committed")
 
 
 def _check_encoding(conn: psycopg.Connection) -> None:
     require_autocommit(conn)
     encoding = conn.info.parameter_status("server_encoding")       # без запроса: сервер сообщает её при входе
     if encoding != "UTF8":
-        raise MigrationError(f"нужна база в кодировке UTF8, а не {encoding}: имена и пути объектов хранятся в NFC")
+        raise MigrationError(f"a database in UTF8 encoding is required, not {encoding}: names and paths of objects are kept in NFC")
 
 
 def _check_version(conn: psycopg.Connection) -> None:
     major = conn.info.server_version // 10000                      # без запроса: сервер сообщает её при входе
     if major < PG_MIN:
-        raise MigrationError(f"нужен PostgreSQL {PG_MIN} или новее, а сервер — {major}: перенесите базу на новый "
-                             "сервер (pg_upgrade или pg_dump и pg_restore)")
+        raise MigrationError(f"PostgreSQL {PG_MIN} or newer is required, but the server is {major}: move the base to a new "
+                             "server (pg_upgrade, or pg_dump and pg_restore)")
 
 
 def _plan(conn: psycopg.Connection) -> list[tuple[Path, str, str]]:
@@ -97,14 +97,14 @@ def _plan(conn: psycopg.Connection) -> list[tuple[Path, str, str]]:
     files = sorted(SQL_DIR.glob("[0-9][0-9][0-9][0-9]_*.sql"))
     missing = sorted(set(applied) - {p.name for p in files})
     if missing:
-        raise MigrationError(f"в базе применены миграции, которых нет в коде: {', '.join(missing)} — код старее базы")
+        raise MigrationError(f"the base has migrations applied that the code does not have: {', '.join(missing)} — the code is older than the base")
     plan = []
     for path in files:
         sql = path.read_text(encoding="utf-8")
         digest = hashlib.sha256(sql.encode("utf-8")).hexdigest()
         if path.name in applied:
             if applied[path.name] != digest:
-                raise MigrationError(f"{path.name}: файл изменён после применения — изменения пишутся новой миграцией")
+                raise MigrationError(f"{path.name}: the file was changed after it was applied — changes go into a new migration")
             continue
         plan.append((path, sql, digest))
     return plan
@@ -142,7 +142,7 @@ def rehearse(conn: psycopg.Connection, *, lock_timeout_ms: int = REHEARSE_LOCK_T
     _check_encoding(conn)
     _check_version(conn)
     if not conn.execute("SELECT pg_try_advisory_lock(%s)", (MIGRATION_LOCK,)).fetchone()[0]:
-        raise RehearsalBusy("замок миграций занят — базу сейчас мигрирует другой процесс")
+        raise RehearsalBusy("the migration lock is taken — another process is migrating the base now")
     try:
         names = []
         with conn.transaction():
@@ -157,7 +157,7 @@ def rehearse(conn: psycopg.Connection, *, lock_timeout_ms: int = REHEARSE_LOCK_T
                 except (psycopg.errors.LockNotAvailable, psycopg.errors.QueryCanceled) as e:
                     raise RehearsalBusy(f"{path.name}: {type(e).__name__}: {e}") from e
                 except ONE_TRANSACTION_LIMITS as e:
-                    raise RehearsalLimited(f"проверка не смогла прогнать миграции в одной транзакции: {path.name}: "
+                    raise RehearsalLimited(f"the check could not run the migrations in one transaction: {path.name}: "
                                            f"{type(e).__name__}: {e}") from e
                 except psycopg.Error as e:
                     raise MigrationError(f"{path.name}: {type(e).__name__}: {e}") from e
@@ -189,8 +189,8 @@ def _check_mine(conn: psycopg.Connection, loaded: list[packs.Pack]) -> None:
         try:
             packs._check_templates([*loaded, dataclasses.replace(pack, templates=[t])])
         except packs.PackError as e:
-            raise MigrationError(f"свой вид {t.code} («Мои виды») не сходится с пакетами: {e} — верните код в пакет "
-                                 f"или поправьте свой вид {t.code}") from e
+            raise MigrationError(f"the own kind {t.code} (packs/mine) does not agree with the packs: {e} — return the code to the pack "
+                                 f"or fix the own kind {t.code}") from e
 
 
 def load_vocab(conn: psycopg.Connection) -> None:
@@ -216,31 +216,31 @@ def load_vocab(conn: psycopg.Connection) -> None:
             _upsert_concept(conn, c, "schema", now)
         loaded = packs.load_packs()
         if any(p.name == MINE for p in loaded):
-            raise MigrationError(f"пакет из файла с именем {MINE}: имя занято пакетом своих видов в базе («Мои виды») — "
-                                 f"уберите его из AMEMO_PACKS (свои виды из подборки вливает импорт)")
+            raise MigrationError(f"a pack from a file named {MINE}: the name is taken by the pack of own kinds in the base (packs/mine) — "
+                                 f"remove it from AMEMO_PACKS (own kinds of a bundle come in through import)")
         mine = {code: scheme for scheme, code in conn.execute(
             "SELECT scheme, code FROM concept WHERE origin = %s AND scheme IN ('kind', 'entity_class')", (MINE,))}
         for p in loaded:
             clash = sorted({c.code for c in p.concepts if mine.get(c.code) == c.scheme}
                            | {t.code for t in p.templates if t.code in mine})
             if clash:
-                raise MigrationError(f"пакет {p.name}: код {', '.join(clash)} уже занят своим видом («Мои виды») — "
-                                     f"переименуйте вид пакета или удалите свой вид")
+                raise MigrationError(f"pack {p.name}: the code {', '.join(clash)} is already taken by an own kind (packs/mine) — "
+                                     f"rename the kind of the pack or delete the own kind")
         # свойства, которые завели свои виды: пакет из файла с тем же кодом property — отказ, как у кода вида
         mine_props = {code for (code,) in conn.execute(
             "SELECT code FROM concept WHERE origin = %s AND scheme = 'property'", (MINE,))}
         for p in loaded:
             clash = sorted(c.code for c in p.concepts if c.scheme == "property" and c.code in mine_props)
             if clash:
-                raise MigrationError(f"пакет {p.name}: величина {', '.join(clash)} уже заведена своим видом "
-                                     f"(«Мои виды») — переименуйте величину пакета или свойство своего вида")
+                raise MigrationError(f"pack {p.name}: the property {', '.join(clash)} is already defined by an own kind "
+                                     f"(packs/mine) — rename the property of the pack or the property of the own kind")
         if mine or mine_props:
             _check_mine(conn, loaded)
         for p in loaded:
             row = conn.execute("SELECT digest FROM pack WHERE name = %s AND version = %s",
                                (p.name, p.version)).fetchone()
             if row is not None and row[0] != p.digest:
-                raise MigrationError(f"пакет {p.name} {p.version}: уже загружен с другим содержимым — поднимите версию")
+                raise MigrationError(f"pack {p.name} {p.version}: already loaded with other content — raise the version")
             # requires обновляется и у уже загруженного пакета: базы до 0007 получили столбец пустым
             conn.execute("INSERT INTO pack (name, version, digest, requires, loaded_at) VALUES (%s, %s, %s, %s, %s) "
                          "ON CONFLICT (name, version) DO UPDATE SET requires = EXCLUDED.requires",
@@ -258,7 +258,7 @@ def load_vocab(conn: psycopg.Connection) -> None:
                         "VALUES (%s, %s, %s, %s, %s, %s, %s)",
                         (t.code, t.version, t.target, t.applies_to, Jsonb(body), body_hash, now))
                 elif row[0] != body_hash:
-                    raise MigrationError(f"шаблон {t.code} {t.version}: уже загружен с другим содержимым — поднимите version")
+                    raise MigrationError(f"template {t.code} {t.version}: already loaded with other content — raise version")
         # действующие версии шаблонов — те, что принесли загруженные сейчас пакеты; старые версии остаются в template
         conn.execute("DELETE FROM template_active")
         for p in loaded:
@@ -282,8 +282,8 @@ def load_vocab(conn: psycopg.Connection) -> None:
             try:
                 conn.execute("DELETE FROM concept WHERE scheme = %s AND code = %s", (scheme, code))
             except psycopg.errors.ForeignKeyViolation as e:
-                raise MigrationError(f"пакет {origin}: {scheme}.{code} — исчез код, которым пользуются записи; "
-                                     f"верните его в словарь ({e.diag.constraint_name})") from e
+                raise MigrationError(f"pack {origin}: {scheme}.{code} — a code that records use has disappeared; "
+                                     f"return it to the vocabulary ({e.diag.constraint_name})") from e
 
 
 def seed_ids(conn: psycopg.Connection) -> None:
@@ -325,16 +325,16 @@ def set_base_name(conn: psycopg.Connection, name: str) -> str:
     1–BASE_NAME_MAX знаков, без управляющих и невидимых знаков (правило то же, что у сегмента папки)."""
     require_autocommit(conn)
     if not isinstance(name, str):
-        raise BaseNameError(f"имя базы {name!r}: нужна строка")
+        raise BaseNameError(f"base name {name!r}: a string is required")
     value = unicodedata.normalize("NFC", name).strip()
     if not value:
-        raise BaseNameError("имя базы: пустое")
+        raise BaseNameError("base name: empty")
     if len(value) > BASE_NAME_MAX:
-        raise BaseNameError(f"имя базы: {len(value)} знаков, можно до {BASE_NAME_MAX}")
+        raise BaseNameError(f"base name: {len(value)} characters, up to {BASE_NAME_MAX} are allowed")
     bad = next((ch for ch in value if ch not in folders._ALLOWED and unicodedata.category(ch) in folders._FORBIDDEN),
                None)
     if bad is not None:
-        raise BaseNameError(f"имя базы: невидимый или управляющий знак U+{ord(bad):04X}")
+        raise BaseNameError(f"base name: an invisible or control character U+{ord(bad):04X}")
     with conn.transaction():
         conn.execute("INSERT INTO meta (key, value) VALUES ('base_name', %s) "
                      "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", (Jsonb(value),))

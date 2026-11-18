@@ -196,7 +196,7 @@ def test_tokens_file_of_another_user_is_rejected(tmp_path, monkeypatch):
     if owner == 0:
         pytest.skip("файл root принимается всегда: от root другого владельца не подменить")
     monkeypatch.setattr(settings.os, "getuid", lambda: owner + 1)       # служба — другой пользователь
-    with pytest.raises(settings.SettingsError, match="другому пользователю"):
+    with pytest.raises(settings.SettingsError, match="another user"):
         settings.load_tokens(path)
 
 
@@ -223,7 +223,7 @@ def test_fifo_in_place_of_the_tokens_file_does_not_hang_the_start(tmp_path):
     path = tmp_path / "amemo-tokens.toml"
     os.mkfifo(path)
     started = time.perf_counter()
-    with pytest.raises(settings.SettingsError, match="не обычный файл"):
+    with pytest.raises(settings.SettingsError, match="not a regular file"):
         settings.load_tokens(path)
     assert time.perf_counter() - started < 1
 

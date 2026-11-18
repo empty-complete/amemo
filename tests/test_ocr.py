@@ -101,7 +101,7 @@ def test_settings_ocr_in_toml(tmp_path):
 
 
 @pytest.mark.parametrize("env, words", [
-    ({"AMEMO_OCR": "cloud"}, "ещё не поддерживается"),          # облако зарезервировано
+    ({"AMEMO_OCR": "cloud"}, "not supported yet"),          # облако зарезервировано
     ({"AMEMO_OCR": "abbyy"}, "AMEMO_OCR"),
     ({"AMEMO_OCR_LANGUAGES": "rus+Рус"}, "AMEMO_OCR_LANGUAGES"),
     ({"AMEMO_OCR_LANGUAGES": "en"}, "AMEMO_OCR_LANGUAGES"),     # коды tessdata — от трёх знаков
@@ -283,7 +283,7 @@ def test_list_and_remove(run, home, fetched, monkeypatch):
 
 def test_cloud_is_reserved(run):
     code, out, _ = run("ocr", "list", "--json", extra={"AMEMO_OCR": "cloud"})
-    assert code == 2 and "ещё не поддерживается" in json.loads(out)["detail"]
+    assert code == 2 and "not supported yet" in json.loads(out)["detail"]
 
 
 def test_traineddata_header():
