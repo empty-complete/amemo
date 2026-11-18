@@ -151,11 +151,11 @@ def test_main_open_host_with_tokens(tmp_path, capsys):
 
 
 @pytest.mark.parametrize("argv, env, words", [
-    (["--host", "amemo:8767"], {}, "без порта"),
-    (["--host", "http://amemo"], {}, "без порта"),
-    (["--port", "0"], {}, "от 1 до 65535"),
+    (["--host", "amemo:8767"], {}, "without a port"),
+    (["--host", "http://amemo"], {}, "without a port"),
+    (["--port", "0"], {}, "from 1 to 65535"),
     ([], {"AMEMO_DSN": ""}, "AMEMO_DSN"),
-    ([], {"AMEMO_ALLOWED_HOSTS": "amemo:8767"}, "без порта"),
+    ([], {"AMEMO_ALLOWED_HOSTS": "amemo:8767"}, "without a port"),
     ([], {"AMEMO_STATE_QUOTA": "много"}, "AMEMO_STATE_QUOTA"),
 ])
 def test_main_bad_settings_exit_2(tmp_path, capsys, argv, env, words):

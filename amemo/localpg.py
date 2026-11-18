@@ -55,13 +55,13 @@ def free_port(start: int = PORT_FROM, host: str = "127.0.0.1", tries: int = PORT
             except OSError:
                 continue
             return port
-    raise LocalPgError(f"нет свободного порта в {start}–{start + tries - 1} на {host}")
+    raise LocalPgError(f"no free port in {start}–{start + tries - 1} on {host}")
 
 
 def _major(text: str) -> int:
     found = re.search(r"\b(\d+)(?:\.\d+)?", text)
     if not found:
-        raise LocalPgError(f"не понял версию PostgreSQL: {text.strip()!r}")
+        raise LocalPgError(f"cannot read the PostgreSQL version: {text.strip()!r}")
     return int(found.group(1))
 
 
@@ -94,9 +94,9 @@ def native(path: Path) -> str:
     short = _short(text)
     if short and _ansi(short):
         return short
-    raise LocalPgError(f"{text}: в пути есть символы, которых нет в кодовой странице Windows, а коротких имён 8.3 "
-                       f"у тома нет — PostgreSQL такой путь не откроет; выберите папку с латинскими буквами, "
-                       f"например C:\\amemo-data")
+    raise LocalPgError(f"{text}: the path has characters missing from the Windows code page, and the volume has no 8.3 short "
+                       f"names — PostgreSQL will not open such a path; choose a folder with Latin letters, "
+                       f"for example C:\\amemo-data")
 
 
 @dataclass(frozen=True)
@@ -107,7 +107,7 @@ class Cluster:
     def tool(self, name: str) -> Path:
         path = self.bin / (f"{name}.exe" if WINDOWS else name)
         if not path.is_file():
-            raise LocalPgError(f"нет {path}: в pg_bin нужны {', '.join(TOOLS)} PostgreSQL {PG_MIN}+")
+            raise LocalPgError(f"no {path}: pg_bin needs {', '.join(TOOLS)} of PostgreSQL {PG_MIN}+")
         return path
 
     def exe(self, name: str) -> str:
@@ -120,7 +120,7 @@ class Cluster:
         done = self._run([self.exe("pg_ctl"), "--version"], "pg_ctl --version")
         major = _major(done.stdout)
         if major < PG_MIN:
-            raise LocalPgError(f"PostgreSQL {major} в {self.bin}: нужен {PG_MIN} или новее")
+            raise LocalPgError(f"PostgreSQL {major} in {self.bin}: {PG_MIN} or newer is required")
         return major
 
     @property
@@ -140,15 +140,15 @@ class Cluster:
             raise LocalPgError(f"{conf}: {e}") from None
         found = re.findall(r"^\s*port\s*=\s*(\d+)", text, flags=re.MULTILINE)
         if not found:
-            raise LocalPgError(f"{conf}: порт не задан")
+            raise LocalPgError(f"{conf}: the port is not set")
         return int(found[-1])
 
     def init(self, password: str, port: int) -> None:
         """Новый кластер: роль amemo с паролем, UTF8 без локали, только localhost и scram-sha-256."""
         if self.exists:
-            raise LocalPgError(f"{self.data}: кластер уже есть")
+            raise LocalPgError(f"{self.data}: the cluster already exists")
         if self.data.exists() and any(self.data.iterdir()):
-            raise LocalPgError(f"{self.data}: папка не пустая и не кластер PostgreSQL — выберите другую")
+            raise LocalPgError(f"{self.data}: the folder is not empty and is not a PostgreSQL cluster — choose another")
         self.data.parent.mkdir(parents=True, exist_ok=True)   # папку кластера создаёт initdb: короткое имя — у родителя
         # файл пароля — рядом с кластером, а не во временной папке профиля: её путь бывает не в кодовой странице ANSI
         fd, pwfile = tempfile.mkstemp(prefix="amemo-pw-", dir=self.data.parent, text=True)
@@ -172,7 +172,7 @@ class Cluster:
     def start(self) -> bool:
         """Запустить, если не запущен; True — запустили сейчас."""
         if not self.exists:
-            raise LocalPgError(f"{self.data}: кластера нет — сначала amemo setup")
+            raise LocalPgError(f"{self.data}: no cluster — run amemo setup first")
         if self.running():
             return False
         self.log.parent.mkdir(parents=True, exist_ok=True)
@@ -205,8 +205,8 @@ class Cluster:
         if done.returncode != 0:
             # stderr — последним: причина ошибки там, а stdout initdb длинный
             tail = ((done.stdout or "") + "\n" + (done.stderr or "")).strip().splitlines()[-3:] if not detach else []
-            where = f"; журнал — {self.log}" if what.startswith("pg_ctl start") else ""
-            raise LocalPgError(f"{what}: код {done.returncode}" + (f": {' / '.join(tail)}" if tail else "") + where)
+            where = f"; the log is {self.log}" if what.startswith("pg_ctl start") else ""
+            raise LocalPgError(f"{what}: exit code {done.returncode}" + (f": {' / '.join(tail)}" if tail else "") + where)
         return done
 
 
@@ -237,7 +237,7 @@ def ensure_database(admin_dsn: str) -> list[str]:
                         conn.execute(sql.SQL("CREATE EXTENSION {}").format(sql.Identifier(ext)))
                         made.append(f"{ext} в {name}")
     except psycopg.Error as e:
-        hint = (" — в pg_bin нет pgvector: нужен PostgreSQL со встроенным расширением vector"
+        hint = (" — pg_bin has no pgvector: PostgreSQL with the vector extension built in is required"
                 if "vector" in str(e) and "control" in str(e) else "")
-        raise LocalPgError(f"подготовка базы: {e}".strip() + hint) from None
+        raise LocalPgError(f"preparing the database: {e}".strip() + hint) from None
     return made

@@ -955,7 +955,7 @@ def test_check_limited_by_one_transaction_is_its_own_code(pg, dsn, tmp_path, mon
         "9999_use": "CREATE TABLE upd_paint AS SELECT 'blue'::upd_color AS color;"}))
     assert server.main(["--check"], env=state_env(tmp_path, AMEMO_DSN=dsn)) == updates.CHECK_LIMITED
     err = capsys.readouterr().err
-    assert "не смогла прогнать миграции" in err and "9999_use.sql" in err
+    assert "could not run the migrations" in err and "9999_use.sql" in err
     assert "upd_paint" not in _tables(pg)
 
 
@@ -979,7 +979,7 @@ def test_check_is_postponed_while_migration_lock_is_held(pg, dsn, tmp_path, caps
     try:
         other.execute("SELECT pg_advisory_lock(%s)", (db.MIGRATION_LOCK,))
         assert server.main(["--check"], env=state_env(tmp_path, AMEMO_DSN=dsn)) == updates.CHECK_TEMPORARY
-        assert "замок миграций занят" in capsys.readouterr().err
+        assert "the migration lock is taken" in capsys.readouterr().err
     finally:
         other.close()
     assert server.main(["--check"], env=state_env(tmp_path, AMEMO_DSN=dsn)) == 0

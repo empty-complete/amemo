@@ -47,21 +47,21 @@ class EmbeddingProvider:
             return []
         vectors = list(self._embed(values))
         if len(vectors) != len(values):
-            raise EmbeddingError(f"provider вернул число векторов {len(vectors)}, ожидалось {len(values)}")
+            raise EmbeddingError(f"the provider returned {len(vectors)} vectors, {len(values)} were expected")
         checked = []
         for i, vector in enumerate(vectors):
             try:
                 coordinates = list(vector)
             except TypeError as e:
-                raise EmbeddingError(f"вектор {i} не является последовательностью float") from e
+                raise EmbeddingError(f"vector {i} is not a sequence of floats") from e
             if len(coordinates) != self.dims:
-                raise EmbeddingError(f"вектор {i}: размерность {len(coordinates)}, ожидалось {self.dims}")
+                raise EmbeddingError(f"vector {i}: {len(coordinates)} dimensions, {self.dims} were expected")
             try:
                 converted = [float(value) for value in coordinates]
             except (TypeError, ValueError, OverflowError) as e:
-                raise EmbeddingError(f"вектор {i}: координаты должны быть конечными float") from e
+                raise EmbeddingError(f"vector {i}: coordinates must be finite floats") from e
             if not all(math.isfinite(value) for value in converted):
-                raise EmbeddingError(f"вектор {i}: координаты должны быть конечными float")
+                raise EmbeddingError(f"vector {i}: coordinates must be finite floats")
             checked.append(converted)
         return checked
 
@@ -113,7 +113,7 @@ class FastembedProvider(EmbeddingProvider):
         except ModuleNotFoundError:
             raise
         except Exception as e:              # lazy_load: файлы модели читаются при первом embed
-            raise EmbeddingError(f"fastembed: модель {self.name} не считает вектора: {type(e).__name__}: {e}") from e
+            raise EmbeddingError(f"fastembed: the model {self.name} does not compute vectors: {type(e).__name__}: {e}") from e
 
     def _load(self):
         """Модуль fastembed и модель; ошибка не запоминается — следующий вызов попробует снова."""
@@ -122,7 +122,7 @@ class FastembedProvider(EmbeddingProvider):
         except ModuleNotFoundError as e:
             if e.name != "fastembed":
                 raise
-            raise EmbeddingError("fastembed не установлен: установите optional extra amemo[embed]") from e
+            raise EmbeddingError("fastembed is not installed: install the optional extra amemo[embed]") from e
         try:
             return module.TextEmbedding(
                 model_name=self.name,
@@ -133,7 +133,7 @@ class FastembedProvider(EmbeddingProvider):
         except ModuleNotFoundError:
             raise                       # чужая зависимость не установлена — ошибка окружения, как при импорте
         except Exception as e:          # нет файлов модели в кэше, повреждённая модель: provider недоступен
-            raise EmbeddingError(f"fastembed: модель {self.name} не создаётся: {type(e).__name__}: {e}") from e
+            raise EmbeddingError(f"fastembed: the model {self.name} cannot be created: {type(e).__name__}: {e}") from e
 
 
 def get_provider(explicit: EmbeddingProvider | None = None) -> EmbeddingProvider | None:
@@ -145,7 +145,7 @@ def get_provider(explicit: EmbeddingProvider | None = None) -> EmbeddingProvider
         return explicit
     if backend == "fastembed":
         return FastembedProvider()
-    raise EmbeddingError(f"неизвестный AMEMO_BACKEND {backend!r}: нужен fastembed или none")
+    raise EmbeddingError(f"unknown AMEMO_BACKEND {backend!r}: fastembed or none is required")
 
 
 def text_hash(document: str) -> str:
@@ -160,7 +160,7 @@ def _model_id(value: Any) -> uuid.UUID:
     try:
         return value if isinstance(value, uuid.UUID) else uuid.UUID(str(value))
     except (ValueError, AttributeError) as e:
-        raise EmbeddingError(f"model_id {value!r}: это не UUID") from e
+        raise EmbeddingError(f"model_id {value!r}: not a UUID") from e
 
 
 def _model_row(conn: psycopg.Connection, model_id, *, lock: bool = False):
@@ -168,7 +168,7 @@ def _model_row(conn: psycopg.Connection, model_id, *, lock: bool = False):
         "SELECT id, name, version, dims, backend, active, created_at FROM embedding_model "
         f"WHERE id = %s{' FOR UPDATE' if lock else ''}", (_model_id(model_id),)).fetchone()
     if row is None:
-        raise EmbeddingError(f"модель эмбеддингов {model_id} не зарегистрирована")
+        raise EmbeddingError(f"the embedding model {model_id} is not registered")
     return row
 
 
@@ -183,9 +183,9 @@ def register_model(conn: psycopg.Connection, provider: EmbeddingProvider) -> dic
     """Идемпотентно зарегистрировать метаданные provider и адаптеры pgvector для соединения."""
     if not all(isinstance(getattr(provider, field, None), str) and getattr(provider, field).strip()
                for field in ("name", "version", "backend")):
-        raise EmbeddingError("provider: name, version и backend должны быть непустыми строками")
+        raise EmbeddingError("provider: name, version and backend must be non-empty strings")
     if isinstance(provider.dims, bool) or not isinstance(provider.dims, int) or provider.dims <= 0:
-        raise EmbeddingError("provider.dims должен быть положительным целым числом")
+        raise EmbeddingError("provider.dims must be a positive integer")
     register_vector(conn)
     with conn.transaction():
         row = conn.execute(
@@ -194,7 +194,7 @@ def register_model(conn: psycopg.Connection, provider: EmbeddingProvider) -> dic
             (provider.name, provider.version, provider.backend)).fetchone()
         if row is not None:
             if row[3] != provider.dims:
-                raise EmbeddingError(f"модель уже зарегистрирована с размерностью {row[3]}, не {provider.dims}")
+                raise EmbeddingError(f"the model is already registered with {row[3]} dimensions, not {provider.dims}")
             return _model_json(row)
         model_id = uuid7()
         now = datetime.now(timezone.utc)
@@ -249,7 +249,7 @@ def _write_embeddings(conn: psycopg.Connection, model, documents: list[tuple],
 
 def _check_provider(model, provider: EmbeddingProvider) -> None:
     if provider.dims != model[3]:
-        raise EmbeddingError(f"размерность provider {provider.dims} не совпадает с моделью {model[3]}")
+        raise EmbeddingError(f"the provider has {provider.dims} dimensions, the model has {model[3]}")
 
 
 def sync_embeddings(conn: psycopg.Connection, model_id, provider: EmbeddingProvider | None = None) -> dict:
@@ -272,7 +272,7 @@ def embed_revision(conn: psycopg.Connection, target: Target, revision_id, model_
                    provider: EmbeddingProvider | None = None) -> dict:
     """Вектор одной текущей ревизии; совпадающий хэш повторно provider не вызывает."""
     if target not in ("atom", "entity"):
-        raise EmbeddingError(f"неизвестный вид записи {target!r}")
+        raise EmbeddingError(f"unknown record target {target!r}")
     model = _model_row(conn, model_id)
     row = conn.execute(
         "SELECT d.target, d.record_id, d.revision_id, d.document, e.text_hash, e.dims "
@@ -281,7 +281,7 @@ def embed_revision(conn: psycopg.Connection, target: Target, revision_id, model_
         "WHERE d.target = %s AND d.revision_id = %s",
         (model[0], target, revision_id)).fetchone()
     if row is None:
-        raise EmbeddingError(f"текущая поисковая ревизия {target}:{revision_id} не найдена")
+        raise EmbeddingError(f"the current search revision {target}:{revision_id} is not found")
     digest = text_hash(row[3])
     result = {"target": target, "revision_id": str(row[2]), "model_id": str(model[0]),
               "text_hash": digest, "embedded": False}
@@ -303,7 +303,7 @@ def activate_model(conn: psycopg.Connection, model_id) -> dict:
         model = _model_row(conn, model_id, lock=True)
         coverage = embedding_coverage(conn, model[0])
         if not coverage["complete"]:
-            raise EmbeddingError(f"нельзя активировать модель: не хватает {coverage['missing']} эмбеддингов")
+            raise EmbeddingError(f"the model cannot be activated: {coverage['missing']} embeddings are missing")
         # UNIQUE на active проверяется после каждой строки: сначала снимаем старый флаг,
         # затем ставим новый. Оба UPDATE остаются неделимыми для других транзакций.
         conn.execute("UPDATE embedding_model SET active = false WHERE active AND id <> %s", (model[0],))

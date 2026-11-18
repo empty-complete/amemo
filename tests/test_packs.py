@@ -141,7 +141,7 @@ def test_same_version_other_content_is_rejected(pg, monkeypatch, tmp_path):
     db.prepare(pg)
     (example / "pack.yaml").write_text((example / "pack.yaml").read_text(encoding="utf-8") + "# другая правка\n",
                                        encoding="utf-8")
-    with pytest.raises(db.MigrationError, match="пакет example 1.0.0.*поднимите версию"):
+    with pytest.raises(db.MigrationError, match="pack example 1.0.0.*raise the version"):
         db.load_vocab(pg)
 
 
@@ -160,7 +160,7 @@ def test_disappeared_used_code_is_rejected(pg, monkeypatch, tmp_path):
     db.prepare(pg)
     _commit_atom(pg, "idea")
     monkeypatch.setattr(packs, "discover", lambda: [packs.CORE_PACK])
-    with pytest.raises(db.MigrationError, match="example.*исчез код"):
+    with pytest.raises(db.MigrationError, match="example.*has disappeared"):
         db.load_vocab(pg)
     # ошибка откатила всю загрузку: понятие на месте
     assert pg.execute("SELECT 1 FROM concept WHERE scheme = 'kind' AND code = 'idea'").fetchone()

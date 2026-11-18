@@ -127,22 +127,22 @@ class ObjectStore:
         with self._locked():
             if not (self.root / "0=ocfl_1.1").is_file():
                 if not create:
-                    raise StoreError(f"{self.root}: корня хранилища нет — папка данных не подключена?")
+                    raise StoreError(f"{self.root}: no store root — is the data folder connected?")
                 self._create()
             try:
                 layout = json.loads((self.root / "ocfl_layout.json").read_text(encoding="utf-8"))
                 config = json.loads((self.root / "extensions" / LAYOUT / "config.json").read_text(encoding="utf-8"))
             except (OSError, ValueError) as e:
-                raise StoreError(f"{self.root}: раскладка корня не читается: {e}") from e
+                raise StoreError(f"{self.root}: the layout of the root is not readable: {e}") from e
             if layout.get("extension") != LAYOUT or config != LAYOUT_CONFIG:
-                raise StoreError(f"{self.root}: у корня другая раскладка, нужна {LAYOUT} {LAYOUT_CONFIG}")
+                raise StoreError(f"{self.root}: the root has another layout, {LAYOUT} {LAYOUT_CONFIG} is required")
             self._recover()
 
     def _create(self) -> None:
         leftovers = {"0=ocfl_1.1.tmp", "ocfl_layout.json.tmp"}  # временные файлы прерванного создания
         names = {p.name for p in self.root.iterdir()} if self.root.exists() else set()
         if names - {"extensions", "ocfl_layout.json"} - leftovers:       # недостроенный корень достраивается
-            raise StoreError(f"{self.root}: папка не пуста и это не корень OCFL — писать в неё нельзя")
+            raise StoreError(f"{self.root}: the folder is not empty and is not an OCFL root — it cannot be written to")
         for name in leftovers:
             (self.root / name).unlink(missing_ok=True)
         ext = self.root / "extensions" / LAYOUT
@@ -197,7 +197,7 @@ class ObjectStore:
             if raw.is_file() and sidecar.is_file() and sidecar.read_bytes() == _sidecar(raw.read_bytes()):
                 _write(obj / "inventory.json", raw.read_bytes())
                 return
-        raise StoreError(f"{obj}: нет корневого inventory.json, а старшая версия не цела — нужен разбор вручную")
+        raise StoreError(f"{obj}: no root inventory.json and the latest version is not intact — it needs sorting out by hand")
 
     def _prune(self, path: Path) -> None:
         """Пустые папки раскладки от path вверх до корня."""
@@ -224,7 +224,7 @@ class ObjectStore:
         inventory = self._inventory(object_id)
         state = (inventory or {}).get("versions", {}).get(f"v{n}", {}).get("state")
         if not state:
-            raise StoreError(f"{ocfl_id(object_id)}: в хранилище нет версии {n}")
+            raise StoreError(f"{ocfl_id(object_id)}: the store has no version {n}")
         [digest] = state
         return self.object_dir(object_id) / inventory["manifest"][digest][0]
 
@@ -237,13 +237,13 @@ class ObjectStore:
         object_id = uuid.UUID(str(object_id))
         name = unicodedata.normalize("NFC", name)
         if not name or name in (".", "..") or any(c in name for c in "/\\\x00"):
-            raise StoreError(f"{name!r}: недопустимое имя файла")
+            raise StoreError(f"{name!r}: a file name that is not allowed")
         if not isinstance(n, int) or n < 1:
-            raise StoreError(f"номер версии {n!r}: нужно целое от 1")
+            raise StoreError(f"version number {n!r}: an integer from 1 is required")
         if not DIGEST.fullmatch(digest):
-            raise StoreError(f"digest {digest!r}: нужен sha256: и 64 знака 0-9a-f")
+            raise StoreError(f"digest {digest!r}: sha256: and 64 characters 0-9a-f are required")
         if not (self.root / "0=ocfl_1.1").is_file():
-            raise StoreError(f"{self.root}: корня хранилища нет — сначала init()")
+            raise StoreError(f"{self.root}: no store root — run init() first")
         with self._locked():
             self._recover()
             self._repair(object_id)                         # перед записью объект — в порядке, что бы с ним ни было
@@ -257,7 +257,7 @@ class ObjectStore:
             except BaseException as e:
                 self._repair(object_id)
                 if isinstance(e, OSError):
-                    raise StoreError(f"{name}: копия не записана: {e}") from e
+                    raise StoreError(f"{name}: the copy is not written: {e}") from e
                 raise
             finally:
                 shutil.rmtree(work, ignore_errors=True)
@@ -268,15 +268,15 @@ class ObjectStore:
         inventory = self._inventory(object_id)
         head = int(inventory["head"][1:]) if inventory else 0
         if head > n:
-            raise StoreError(f"{ocfl_id(object_id)}: в хранилище есть версии новее {n}, которых база не знает — "
-                             "нужен разбор вручную")
+            raise StoreError(f"{ocfl_id(object_id)}: the store has versions newer than {n} that the base does not know — "
+                             "it needs sorting out by hand")
         if head == n:
             if list(inventory["versions"][f"v{n}"]["state"]) == [hexdigest] and self.content(object_id, n).is_file():
                 return                  # версию записали, а база — нет (сбой после записи): та же
             self._rollback(object_id, n, work)              # база её не знает, а пришло другое содержимое
             inventory, head = self._inventory(object_id), n - 1
         if n != head + 1:
-            raise StoreError(f"{ocfl_id(object_id)}: следующая версия — {head + 1}, а не {n}")
+            raise StoreError(f"{ocfl_id(object_id)}: the next version is {head + 1}, not {n}")
         version = f"v{n}"
         vdir = work / version
         content_path = None
@@ -342,4 +342,4 @@ class ObjectStore:
             fout.flush()
             os.fsync(fout.fileno())
         if h.hexdigest() != hexdigest:
-            raise StoreError(f"{src.name}: файл изменился, пока его копировали — запишите источник заново")
+            raise StoreError(f"{src.name}: the file changed while it was being copied — write the source again")

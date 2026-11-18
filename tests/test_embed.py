@@ -58,13 +58,13 @@ def test_fake_provider_is_deterministic_and_empty_batch_does_not_call_model(prov
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
 def test_provider_rejects_non_finite_coordinates(provider, value):
     provider.vector = lambda text: [value] * 384
-    with pytest.raises(embed.EmbeddingError, match="конеч"):
+    with pytest.raises(embed.EmbeddingError, match="finite"):
         provider.embed(["bad"])
 
 
 def test_provider_rejects_wrong_vector_count(provider):
     provider._embed = lambda texts: []
-    with pytest.raises(embed.EmbeddingError, match="число векторов"):
+    with pytest.raises(embed.EmbeddingError, match="vectors"):
         provider.embed(["one"])
 
 

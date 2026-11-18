@@ -119,13 +119,13 @@ def load(env: Mapping[str, str] | None = None, **explicit) -> Settings:
     env = os.environ if env is None else env
     unknown = set(explicit) - set(ENV)
     if unknown:
-        raise TypeError(f"settings.load: неизвестные настройки {sorted(unknown)}")
+        raise TypeError(f"settings.load: unknown settings {sorted(unknown)}")
     home = portable.home(env)
     config, table = _config(env, home)
     raw: dict[str, tuple[object, str, Path | None]] = {}       # поле → (значение, источник, база относительных путей)
     for name, var in ENV.items():
         if explicit.get(name) is not None:
-            raw[name] = (explicit[name], f"аргумент {name}", None)
+            raw[name] = (explicit[name], f"argument {name}", None)
         elif env.get(var, "").strip():
             raw[name] = (env[var].strip(), var, None)
         elif name in table:
@@ -136,7 +136,7 @@ def load(env: Mapping[str, str] | None = None, **explicit) -> Settings:
             return None
         value, where, base = raw[name]
         if not isinstance(value, (str, os.PathLike)) or not str(value).strip():
-            raise SettingsError(f"{where}: нужен путь, получено {value!r}")
+            raise SettingsError(f"{where}: a path is required, got {value!r}")
         result = _expand(str(value).strip(), home)
         return base / result if base is not None and not result.is_absolute() else result
 
@@ -145,7 +145,7 @@ def load(env: Mapping[str, str] | None = None, **explicit) -> Settings:
             return default
         value, where, _ = raw[name]
         if not isinstance(value, str) or not value.strip():
-            raise SettingsError(f"{where}: нужна строка, получено {value!r}")
+            raise SettingsError(f"{where}: a string is required, got {value!r}")
         return value.strip()
 
     state = path("state") or home / ".local" / "state" / "amemo"
@@ -204,42 +204,42 @@ def load_tokens(path: Path | str) -> tuple[Token, ...]:
             info = os.fstat(f.fileno())          # права и владелец — того файла, который читаем
             raw = f.read() if stat.S_ISREG(info.st_mode) else None
     except FileNotFoundError:
-        raise SettingsError(f"{path}: файла токенов нет — создайте токен (amemo token create) или уберите AMEMO_TOKENS")
+        raise SettingsError(f"{path}: no tokens file — create a token (amemo token create) or remove AMEMO_TOKENS")
     except OSError as e:
-        raise SettingsError(f"{path}: не читается: {e}") from e
+        raise SettingsError(f"{path}: not readable: {e}") from e
     if raw is None:
-        raise SettingsError(f"{path}: это не обычный файл")
+        raise SettingsError(f"{path}: not a regular file")
     if os.name == "posix":
         # кто может писать в файл, тот впишет свой токен с правом записи; хэши сами по себе не раскрывают токены.
         # Чужой файл (владелец — другой пользователь, кроме root) его владелец перепишет когда угодно.
         # На Windows st_uid и биты прав не отражают доступ (его задают ACL): файл в профиле пользователя
         # (%USERPROFILE%) другим пользователям по умолчанию закрыт, а проверять ACL — не дело amemo
         if info.st_uid not in (os.getuid(), 0):
-            raise SettingsError(f"{path}: файл токенов принадлежит другому пользователю (uid {info.st_uid}) — "
-                                f"создайте его от пользователя службы")
+            raise SettingsError(f"{path}: the tokens file belongs to another user (uid {info.st_uid}) — "
+                                f"create it as the user of the service")
         if info.st_mode & 0o022:
-            raise SettingsError(f"{path}: файл токенов доступен на запись другим пользователям — chmod 600 {path}")
+            raise SettingsError(f"{path}: the tokens file is writable by other users — chmod 600 {path}")
         if info.st_mode & 0o044:
             log.warning("%s: the tokens file is readable by other users — chmod 600 %s", path, path)
     try:
         data = tomllib.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
-        raise SettingsError(f"{path}: не читается: {e}") from e
+        raise SettingsError(f"{path}: not readable: {e}") from e
     entries = data.get("token", [])
     if set(data) - {"token"} or not isinstance(entries, list):
-        raise SettingsError(f"{path}: нужны только таблицы [[token]]")
+        raise SettingsError(f"{path}: only [[token]] tables are allowed")
     tokens = []
     for i, entry in enumerate(entries, 1):
         where = f"{path}: token {i}"
         if not isinstance(entry, dict):
-            raise SettingsError(f"{where}: нужна таблица [[token]]")
+            raise SettingsError(f"{where}: a [[token]] table is required")
         if not isinstance(entry.get("hash"), str) or not TOKEN_HASH.fullmatch(entry["hash"]):
-            raise SettingsError(f"{where}: hash — нужно sha256:<64 шестнадцатеричных знака>")
+            raise SettingsError(f"{where}: hash — sha256:<64 hexadecimal characters> is required")
         if not isinstance(entry.get("agent"), str) or not AGENT.fullmatch(entry["agent"]):
-            raise SettingsError(f"{where}: agent {entry.get('agent')!r} — нужен person:<имя> или model:<имя>")
+            raise SettingsError(f"{where}: agent {entry.get('agent')!r} — person:<name> or model:<name> is required")
         write = entry.get("write", False)              # без явного права — только чтение
         if not isinstance(write, bool):
-            raise SettingsError(f"{where}: write — нужно true или false")
+            raise SettingsError(f"{where}: write — true or false is required")
         tokens.append(Token(entry["hash"], entry["agent"], write))
     return tuple(tokens)
 
@@ -285,16 +285,16 @@ def _config(env: Mapping[str, str], home: Path) -> tuple[Path | None, dict]:
     path = _expand(explicit, home) if explicit else home / ".config" / "amemo" / "amemo.toml"
     if not path.is_file():
         if explicit:
-            raise SettingsError(f"AMEMO_CONFIG: файла {path} нет")
+            raise SettingsError(f"AMEMO_CONFIG: no file {path}")
         return None, {}
     try:
         table = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
-        raise SettingsError(f"{path}: не читается как TOML: {e}") from e
+        raise SettingsError(f"{path}: not readable as TOML: {e}") from e
     unknown = set(table) - set(ENV)
     if unknown:
-        raise SettingsError(f"{path}: неизвестные ключи {', '.join(sorted(unknown))}; "
-                            f"допустимы {', '.join(ENV)}")
+        raise SettingsError(f"{path}: unknown keys {', '.join(sorted(unknown))}; "
+                            f"allowed are {', '.join(ENV)}")
     return path, table
 
 
@@ -307,13 +307,13 @@ def _port(entry) -> int:
         return DEFAULT_PORT
     value, where, _ = entry
     if isinstance(value, bool) or not isinstance(value, (int, str)):
-        raise SettingsError(f"{where}: порт — целое число, получено {value!r}")
+        raise SettingsError(f"{where}: the port is an integer, got {value!r}")
     try:
         port = int(value)
     except ValueError:
-        raise SettingsError(f"{where}: порт — целое число, получено {value!r}") from None
+        raise SettingsError(f"{where}: the port is an integer, got {value!r}") from None
     if not 1 <= port <= 65535:
-        raise SettingsError(f"{where}: порт {port} — нужен от 1 до 65535")
+        raise SettingsError(f"{where}: port {port} — from 1 to 65535 is required")
     return port
 
 
@@ -322,7 +322,7 @@ def _agent(entry, pattern: re.Pattern, prefix: str, *, default: str) -> str:
         return default
     value, where, _ = entry
     if not isinstance(value, str) or not pattern.fullmatch(value.strip()):
-        raise SettingsError(f"{where}: агент {value!r} — нужен {prefix}<имя> из строчных латинских букв, цифр, «_.-»")
+        raise SettingsError(f"{where}: agent {value!r} — {prefix}<name> of lowercase Latin letters, digits, «_.-» is required")
     return value.strip()
 
 
@@ -330,7 +330,7 @@ def _origins(entry) -> tuple[str, ...]:
     if entry is None:
         return ()
     value, where, _ = entry
-    items = _list(value, where, "источников")
+    items = _list(value, where, "origins")
     origins = []
     for item in (item.strip() for item in items):
         if not item:
@@ -338,7 +338,7 @@ def _origins(entry) -> tuple[str, ...]:
         origin = item.rstrip("/").lower()
         parts = urlsplit(origin)
         if parts.scheme not in ("http", "https") or not parts.netloc or parts.path or parts.query or parts.fragment:
-            raise SettingsError(f"{where}: источник {item!r} — нужен вид http://хост:порт, без пути")
+            raise SettingsError(f"{where}: origin {item!r} — the form http://host:port is required, without a path")
         origins.append(origin)
     return tuple(dict.fromkeys(origins))
 
@@ -365,8 +365,8 @@ def _host(entry) -> str:
     value, where, _ = entry
     host = host_value(value) if isinstance(value, str) else None
     if host is None:
-        raise SettingsError(f"{where}: адрес {value!r} — нужен IPv4, IPv6 или имя хоста, без порта и схемы "
-                            f"(порт — AMEMO_PORT)")
+        raise SettingsError(f"{where}: address {value!r} — IPv4, IPv6 or a host name is required, without a port and a scheme "
+                            f"(the port is AMEMO_PORT)")
     return host
 
 
@@ -375,7 +375,7 @@ def _list(value, where: str, what: str) -> list[str]:
         return value.split(",")
     if isinstance(value, (list, tuple)) and all(isinstance(item, str) for item in value):
         return list(value)
-    raise SettingsError(f"{where}: нужен список {what} или строка через запятую, получено {value!r}")
+    raise SettingsError(f"{where}: a list of {what} or a comma-separated string is required, got {value!r}")
 
 
 def _allowed_hosts(entry) -> tuple[str, ...]:
@@ -383,13 +383,13 @@ def _allowed_hosts(entry) -> tuple[str, ...]:
         return ()
     value, where, _ = entry
     hosts = []
-    for item in (item.strip() for item in _list(value, where, "имён")):
+    for item in (item.strip() for item in _list(value, where, "names")):
         if not item:
             continue
         host = host_value(item)
         if host is None:
-            raise SettingsError(f"{where}: {item!r} — нужно имя хоста или адрес без порта и схемы: Host сверяется "
-                                f"по имени, порт любой (например amemo)")
+            raise SettingsError(f"{where}: {item!r} — a host name or an address without a port and a scheme is required: Host is compared "
+                                f"by name, any port (for example amemo)")
         hosts.append(host)
     return tuple(dict.fromkeys(hosts))
 
@@ -403,7 +403,7 @@ def _lang(entry) -> str | None:
     try:
         return lang.check(value)
     except lang.LangError:
-        raise SettingsError(f"{where}: язык {value!r} — допустимы {', '.join(lang.LANGS)}") from None
+        raise SettingsError(f"{where}: language {value!r} — allowed are {', '.join(lang.LANGS)}") from None
 
 
 def _quota(entry) -> int:
@@ -417,8 +417,8 @@ def _quota(entry) -> int:
     else:
         number, unit = None, ""
     if number is None or unit not in QUOTA_UNITS or number <= 0:
-        raise SettingsError(f"{where}: предел {value!r} — нужно целое число байт больше нуля или с единицей "
-                            f"(500M, 10G, 1T — двоичные: МиБ, ГиБ, ТиБ)")
+        raise SettingsError(f"{where}: limit {value!r} — an integer number of bytes above zero, or with a unit, is required "
+                            f"(500M, 10G, 1T — binary: MiB, GiB, TiB)")
     return number * QUOTA_UNITS[unit]
 
 
@@ -430,7 +430,7 @@ def _bool(entry, *, default: bool) -> bool:
         return value
     if isinstance(value, str) and value.strip().lower() in BOOLEAN:
         return BOOLEAN[value.strip().lower()]
-    raise SettingsError(f"{where}: нужно true или false, получено {value!r}")
+    raise SettingsError(f"{where}: true or false is required, got {value!r}")
 
 
 def _ocr(entry) -> str:
@@ -439,10 +439,10 @@ def _ocr(entry) -> str:
     value, where, _ = entry
     mode = value.strip().lower() if isinstance(value, str) else None
     if mode in OCR_RESERVED:
-        raise SettingsError(f"{where}: распознавание {mode!r} ещё не поддерживается — допустимы "
-                            f"{', '.join(OCR_MODES)} (языки tesseract: amemo ocr install rus eng)")
+        raise SettingsError(f"{where}: recognition {mode!r} is not supported yet — allowed are "
+                            f"{', '.join(OCR_MODES)} (tesseract languages: amemo ocr install rus eng)")
     if mode not in OCR_MODES:
-        raise SettingsError(f"{where}: распознавание сканов {value!r} — нужно {' или '.join(OCR_MODES)}")
+        raise SettingsError(f"{where}: scan recognition {value!r} — {' or '.join(OCR_MODES)} is required")
     return mode
 
 
@@ -457,12 +457,12 @@ def _ocr_languages(entry) -> tuple[str, ...]:
         return DEFAULT_OCR_LANGUAGES
     value, where, _ = entry
     if not (isinstance(value, str) or isinstance(value, (list, tuple)) and all(isinstance(x, str) for x in value)):
-        raise SettingsError(f"{where}: нужен список языков tessdata или строка «rus+eng», получено {value!r}")
+        raise SettingsError(f"{where}: a list of tessdata languages or a string «rus+eng» is required, got {value!r}")
     languages = ocr_language_list(value)
     for lang in languages:
         if not OCR_LANGUAGE.fullmatch(lang):
-            raise SettingsError(f"{where}: язык {lang!r} — нужен код tessdata из строчных латинских букв и «_» "
+            raise SettingsError(f"{where}: language {lang!r} — a tessdata code of lowercase Latin letters and «_» is required "
                                 f"(rus, eng, chi_sim)")
     if not languages:
-        raise SettingsError(f"{where}: список языков пуст — уберите настройку или задайте ocr = \"none\"")
+        raise SettingsError(f"{where}: the list of languages is empty — remove the setting or set ocr = \"none\"")
     return tuple(dict.fromkeys(languages))

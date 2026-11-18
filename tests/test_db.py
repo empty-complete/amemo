@@ -47,7 +47,7 @@ def test_migrate_needs_utf8_database():
             self.executed.append(sql)
 
     conn = Conn()
-    with pytest.raises(db.MigrationError, match="кодировке UTF8, а не SQL_ASCII"):
+    with pytest.raises(db.MigrationError, match="UTF8 encoding is required, not SQL_ASCII"):
         db.migrate(conn)
     assert conn.executed == []
 
@@ -65,7 +65,7 @@ def test_migrate_needs_postgresql_18(run):
             self.executed.append(sql)
 
     conn = Conn()
-    with pytest.raises(db.MigrationError, match="нужен PostgreSQL 18 или новее, а сервер — 16"):
+    with pytest.raises(db.MigrationError, match="PostgreSQL 18 or newer is required, but the server is 16"):
         run(conn)
     assert conn.executed == []
 
@@ -77,7 +77,7 @@ def test_changed_migration_is_refused(pg, tmp_path, monkeypatch):
     db.migrate(pg)
     path = sql_dir / "0001_core.sql"
     path.write_text(path.read_text(encoding="utf-8") + "\n-- правка задним числом\n", encoding="utf-8")
-    with pytest.raises(db.MigrationError, match="0001_core.sql: файл изменён"):
+    with pytest.raises(db.MigrationError, match="0001_core.sql: the file was changed"):
         db.migrate(pg)
 
 
@@ -118,7 +118,7 @@ def test_template_changed_without_new_version_is_refused(pg, monkeypatch):
     core.templates = [t.model_copy(update={"description": None}) if t.code == "has_label" else t
                       for t in core.templates]
     monkeypatch.setattr(packs, "load_packs", lambda: loaded)
-    with pytest.raises(db.MigrationError, match="шаблон has_label 1.0.0: уже загружен с другим содержимым"):
+    with pytest.raises(db.MigrationError, match="template has_label 1.0.0: already loaded with other content"):
         db.load_vocab(pg)
 
 
@@ -169,7 +169,7 @@ def test_concurrent_migrations_apply_once(pg):
 def test_missing_migration_file_is_refused(pg, tmp_path, monkeypatch):
     db.migrate(pg)
     monkeypatch.setattr(db, "SQL_DIR", tmp_path)                 # код «старее» базы
-    with pytest.raises(db.MigrationError, match="нет в коде: 0001_core.sql"):
+    with pytest.raises(db.MigrationError, match="the code does not have: 0001_core.sql"):
         db.migrate(pg)
 
 

@@ -57,7 +57,7 @@ def test_new_root_is_valid_and_init_is_idempotent(store):
 
 def test_missing_root_is_created_only_on_request(tmp_path):
     """Пустая папка на месте хранилища, файлы которого база знает, — неподключённый том: молча новый корень не нужен."""
-    with pytest.raises(StoreError, match="корня хранилища нет"):
+    with pytest.raises(StoreError, match="no store root"):
         ObjectStore(tmp_path / "objects").init(create=False)
     assert not (tmp_path / "objects").exists()
 
@@ -66,7 +66,7 @@ def test_init_refuses_foreign_folder(tmp_path):
     (tmp_path / "objects").mkdir()
     (tmp_path / "objects" / "чужой.txt").write_text("x")
     (tmp_path / "objects" / "выгрузка.tmp").write_text("x")
-    with pytest.raises(StoreError, match="не корень OCFL"):
+    with pytest.raises(StoreError, match="not an OCFL root"):
         ObjectStore(tmp_path / "objects").init(create=True)
     assert (tmp_path / "objects" / "выгрузка.tmp").exists()             # чужое не трогается
 
@@ -85,7 +85,7 @@ def test_init_finishes_half_created_root(tmp_path):
 
 def test_init_refuses_root_with_other_layout(store):
     (store.root / "ocfl_layout.json").write_text(json.dumps({"extension": "0002-flat-direct-storage-layout"}))
-    with pytest.raises(StoreError, match="другая раскладка"):
+    with pytest.raises(StoreError, match="another layout"):
         store.init(create=False)
 
 
@@ -156,13 +156,13 @@ def test_file_changed_while_copying_is_refused(store, tmp_path, change):
     change(store, oid, tmp_path)
     n = store.head(oid) + 1
     src = write(tmp_path, "a.pdf", b"new")
-    with pytest.raises(StoreError, match="изменился"):
+    with pytest.raises(StoreError, match="changed"):
         store.add_version(oid, n, src, "a.pdf", digest_of(b"old"), user=USER, message="тест")
     assert store.head(oid) == n - 1
     assert_valid(store)
 
 
-@pytest.mark.parametrize("n, message", [(3, "следующая версия — 2"), (0, "целое от 1")], ids=["через одну", "ноль"])
+@pytest.mark.parametrize("n, message", [(3, "the next version is 2"), (0, "an integer from 1")], ids=["через одну", "ноль"])
 def test_wrong_version_number_is_refused(store, tmp_path, n, message):
     oid = uuid7()
     add(store, tmp_path, oid, 1, b"A")
@@ -174,19 +174,19 @@ def test_versions_newer_than_requested_are_refused(store, tmp_path):
     oid = uuid7()
     add(store, tmp_path, oid, 1, b"A")
     add(store, tmp_path, oid, 2, b"B")
-    with pytest.raises(StoreError, match="новее 1"):
+    with pytest.raises(StoreError, match="newer than 1"):
         add(store, tmp_path, oid, 1, b"C")
     assert store.head(oid) == 2
 
 
 def test_bad_names_and_digests_and_missing_versions(store, tmp_path):
     oid = uuid7()
-    with pytest.raises(StoreError, match="недопустимое имя"):
+    with pytest.raises(StoreError, match="not allowed"):
         store.add_version(oid, 1, write(tmp_path, "a", b"A"), "../a", digest_of(b"A"), user=USER, message="тест")
-    with pytest.raises(StoreError, match="64 знака"):
+    with pytest.raises(StoreError, match="64 characters"):
         store.add_version(oid, 1, write(tmp_path, "a", b"A"), "a", digest_of(b"A").upper(), user=USER,
                           message="тест")
-    with pytest.raises(StoreError, match="нет версии 1"):
+    with pytest.raises(StoreError, match="no version 1"):
         store.content(oid, 1)
 
 
@@ -234,7 +234,7 @@ def test_failure_while_adding_version_keeps_object_valid(store, tmp_path, monkey
     oid = uuid7()
     add(store, tmp_path, oid, 1, b"A")
     _fail_on_replace(monkeypatch, target, nth)
-    with pytest.raises(StoreError, match="копия не записана"):
+    with pytest.raises(StoreError, match="the copy is not written"):
         add(store, tmp_path, oid, 2, b"B")
     monkeypatch.undo()
     assert_valid(store)
@@ -247,7 +247,7 @@ def test_failure_while_adding_version_keeps_object_valid(store, tmp_path, monkey
 def test_failure_while_placing_new_object_leaves_no_folders(store, tmp_path, monkeypatch):
     oid = uuid7()
     _fail_on_replace(monkeypatch, layout_path(ocfl_id(oid)).rsplit("/", 1)[1])
-    with pytest.raises(StoreError, match="копия не записана"):
+    with pytest.raises(StoreError, match="the copy is not written"):
         add(store, tmp_path, oid, 1, b"A")
     monkeypatch.undo()
     assert not store.object_dir(oid).parent.exists()
@@ -308,7 +308,7 @@ def test_object_whose_newest_version_is_broken_is_kept_for_manual_repair(store, 
     obj = store.object_dir(oid)
     (obj / "inventory.json").unlink()
     (obj / "v3" / "inventory.json.sha256").unlink()
-    with pytest.raises(StoreError, match="разбор вручную"):
+    with pytest.raises(StoreError, match="by hand"):
         add(store, tmp_path, oid, 4, b"D")
     assert (obj / "v3" / "content").is_dir() and not (obj / "v4").exists()
 
@@ -320,7 +320,7 @@ def test_object_without_any_whole_version_is_kept_for_manual_repair(store, tmp_p
     (obj / "inventory.json").unlink()
     (obj / "v1" / "inventory.json.sha256").write_text("0" * 64 + " inventory.json\n")
     _leave_mark(store, oid)
-    with pytest.raises(StoreError, match="разбор вручную"):
+    with pytest.raises(StoreError, match="by hand"):
         store.init(create=False)
     assert (obj / "v1" / "content").is_dir()                           # ничего не удалено
 
@@ -344,7 +344,7 @@ def test_hand_edited_inventory_is_not_resealed(store, tmp_path):
     inventory["versions"]["v1"]["message"] = "правка вручную"
     path.write_text(json.dumps(inventory))
     src = write(tmp_path, "b.pdf", b"B")
-    with pytest.raises(StoreError, match="изменился"):
+    with pytest.raises(StoreError, match="changed"):
         store.add_version(oid, 2, src, "b.pdf", digest_of(b"other"), user=USER, message="тест")
     assert (store.object_dir(oid) / "inventory.json.sha256").read_bytes() == sidecar
     assert not validate(store.root)[0]

@@ -135,22 +135,22 @@ def _locate(docs: Path, path: str, check=Path.is_file) -> Path | None:
 def _check_relative(path: str) -> None:
     """Путь — от корня папки документов и вниз: ключ пути неизменен, выход выше корня дал бы чужой ключ."""
     if PurePosixPath(path).is_absolute():
-        raise ObjectError(f"{path}: нужен путь от корня папки документов, а не абсолютный")
+        raise ObjectError(f"{path}: a path from the root of the documents folder is required, not an absolute one")
     if ".." in PurePosixPath(path).parts:
-        raise ObjectError(f"{path}: «..» в пути не допускается — нужен путь от корня папки документов вниз")
+        raise ObjectError(f"{path}: «..» is not allowed in a path — a path down from the root of the documents folder is required")
 
 
 def _check_agent(agent: str) -> None:
     """Агент пишется в базу (ingest записывает его до блокировки объектов): неверный — ObjectError, а не сбой
     ограничения таблицы agent."""
     if not isinstance(agent, str) or not AGENT.fullmatch(agent):
-        raise ObjectError(f"агент {agent!r}: нужен person:<имя> или model:<имя> (строчные латинские буквы, цифры, "
+        raise ObjectError(f"agent {agent!r}: person:<name> or model:<name> is required (lowercase Latin letters, digits, "
                           "«_», «.», «-»)")
 
 
 def _require_autocommit(conn: psycopg.Connection) -> None:
     if not conn.autocommit:
-        raise ObjectError("нужно соединение с autocommit=True (db.connect): иначе запись не фиксируется")
+        raise ObjectError("a connection with autocommit=True is required (db.connect): otherwise the write is not committed")
 
 
 def _lock(conn: psycopg.Connection) -> datetime:
@@ -172,7 +172,7 @@ def ingest(conn: psycopg.Connection, store: ObjectStore, docs: Path, path: str, 
     _check_relative(path)
     file = _locate(docs, path)
     if file is None:
-        raise ObjectError(f"{path}: файла нет в папке документов")
+        raise ObjectError(f"{path}: no such file in the documents folder")
     key = _nfc(posixpath.normpath(path))
     name = _nfc(file.name)          # имя самого файла: у ссылки без расширения текст извлекался бы как у «без текста»
     try:
@@ -180,7 +180,7 @@ def ingest(conn: psycopg.Connection, store: ObjectStore, docs: Path, path: str, 
             digest = "sha256:" + hashlib.file_digest(f, "sha256").hexdigest()
             size = os.fstat(f.fileno()).st_size
     except OSError as e:
-        raise ObjectError(f"{path}: файл не читается ({e.strerror or e})") from e
+        raise ObjectError(f"{path}: the file is not readable ({e.strerror or e})") from e
     with conn.transaction():
         # агент — до блокировки объектов, как в submit (разд. 7.5, шаг 1): пункты новой версии пишутся от его имени
         conn.execute("INSERT INTO agent (id) VALUES (%s) ON CONFLICT (id) DO NOTHING", (agent,))
@@ -229,19 +229,19 @@ def upload_path(path: str | None, filename: str | None) -> str:
     else:
         name = PurePosixPath(_clean(filename or "")).name
         if not name or name in (".", ".."):
-            raise ObjectError("загрузка: у файла нет имени — передайте path", code="invalid")
+            raise ObjectError("upload: the file has no name — pass path", code="invalid")
         rel = f"{UPLOADS}/{name}"
     _check_relative(rel)
     key = _nfc(posixpath.normpath(rel))
     if key in ("", "."):
-        raise ObjectError(f"{rel}: нужен путь файла в папке документов", code="invalid")
+        raise ObjectError(f"{rel}: a file path in the documents folder is required", code="invalid")
     return key
 
 
 def docs_root(docs: Path | None) -> Path:
     """Папка документов для загрузки: не задана или не папка — ObjectError(docs_unavailable)."""
     if docs is None or not _is(Path.is_dir, Path(docs)):
-        raise ObjectError("папка документов недоступна: задайте AMEMO_DOCS (папка должна существовать)",
+        raise ObjectError("the documents folder is unavailable: set AMEMO_DOCS (the folder must exist)",
                           code="docs_unavailable")
     return Path(docs).resolve()
 
@@ -263,7 +263,7 @@ def upload(conn: psycopg.Connection, store: ObjectStore, docs: Path | None, part
         key = upload_path(path, None)
         target = sources.safe_join(root, key)
         if target is None:
-            raise ObjectError(f"{key}: путь выводит из папки документов", code="invalid")
+            raise ObjectError(f"{key}: the path leads out of the documents folder", code="invalid")
         digest = _digest(part)
 
         def same() -> bool:
@@ -272,7 +272,7 @@ def upload(conn: psycopg.Connection, store: ObjectStore, docs: Path | None, part
             if existing is None:
                 return False
             if not _is(Path.is_file, existing) or _digest(existing) != digest:
-                raise ObjectError(f"{key}: по этому пути уже лежит другой файл или папка — выберите другой путь",
+                raise ObjectError(f"{key}: another file or folder is already at this path — choose another path",
                                   code="path_taken")
             return True
 
@@ -281,20 +281,20 @@ def upload(conn: psycopg.Connection, store: ObjectStore, docs: Path | None, part
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
         except (FileExistsError, NotADirectoryError) as e:
-            raise ObjectError(f"{key}: часть пути — файл, а не папка", code="path_taken") from e
+            raise ObjectError(f"{key}: a part of the path is a file, not a folder", code="path_taken") from e
         except OSError as e:
-            raise ObjectError(f"{key}: папку для файла не создать ({e.strerror or e})") from e
+            raise ObjectError(f"{key}: the folder for the file cannot be created ({e.strerror or e})") from e
         try:
             os.link(part, target)                     # не затирает файл, который успел появиться
         except FileExistsError:
             if not same():
-                raise ObjectError(f"{key}: путь занят во время загрузки — повторите", code="path_taken") from None
+                raise ObjectError(f"{key}: the path was taken during the upload — try again", code="path_taken") from None
             return ingest(conn, store, root, key, agent=agent), False
         except OSError as e:
             if e.errno == errno.ENAMETOOLONG:
-                raise ObjectError(f"{key}: слишком длинное имя файла или пути", code="invalid") from None
+                raise ObjectError(f"{key}: the file name or the path is too long", code="invalid") from None
             if e.errno not in NO_LINKS:
-                raise ObjectError(f"{key}: файл не записать в папку документов ({e.strerror or e})") from None
+                raise ObjectError(f"{key}: the file cannot be written to the documents folder ({e.strerror or e})") from None
             if same():                                # в этой файловой системе нет жёстких ссылок
                 return ingest(conn, store, root, key, agent=agent), False
             os.replace(part, target)
@@ -328,13 +328,13 @@ def adopt(conn: psycopg.Connection, store: ObjectStore, record: dict, *, files: 
     try:
         object_id = object_uuid(record.get("id", ""))
     except ValueError as e:                      # RecordError — для записей; здесь ошибка объекта
-        raise ObjectError(f"объект подборки: {e}") from e
+        raise ObjectError(f"object of the bundle: {e}") from e
     kind = record.get("kind")
     label = f"obj:{object_id}"
     for v in record.get("versions") or []:
         n = v.get("n") if isinstance(v, dict) else None
         if not isinstance(n, int) or isinstance(n, bool) or n < 1:
-            raise ObjectError(f"{label}: номер версии {n!r} — нужно целое от 1")
+            raise ObjectError(f"{label}: version number {n!r} — an integer from 1 is required")
     versions = sorted(record.get("versions") or [], key=lambda v: v["n"])
     paths = [_nfc(path) for path in record.get("logical_paths") or []]
     for path in paths:
@@ -359,34 +359,34 @@ def adopt(conn: psycopg.Connection, store: ObjectStore, record: dict, *, files: 
                              (object_id, kind, _nfc(name) if name else None, record.get("media_type"),
                               record.get("format_puid"), record.get("url"), record.get("retrieved_at"), at))
             elif row[0] != kind:
-                raise ObjectError(f"{label}: вид {row[0]}, в подборке {kind}")
+                raise ObjectError(f"{label}: the kind is {row[0]}, in the bundle {kind}")
             else:
                 for column, local in zip(("original_name", "media_type", "url"), row[1:]):
                     theirs = record.get(column)
                     if column == "original_name" and theirs:
                         theirs = _nfc(theirs)
                     if theirs is not None and theirs != local:
-                        warnings.append(f"{label}: {column} {local!r}, в подборке {theirs!r} — остаётся локальное")
+                        warnings.append(f"{label}: {column} {local!r}, in the bundle {theirs!r} — the local one stays")
             for key in paths:
                 owner = conn.execute("SELECT object_id FROM object_path WHERE path = %s", (key,)).fetchone()
                 if owner is None:
                     _add_path(conn, key, object_id, at)
                 elif owner[0] != object_id:
-                    warnings.append(f"{label}: путь {key} уже у объекта obj:{owner[0]} — остаётся за ним")
+                    warnings.append(f"{label}: the path {key} already belongs to the object obj:{owner[0]} — it stays with it")
             have = dict(conn.execute("SELECT n, digest FROM object_version WHERE object_id = %s", (object_id,)))
             copies: list[tuple[int, Path, str]] = []
             for v in versions:
                 n, digest = v.get("n"), v.get("digest")
                 if n in have:
                     if have[n] != digest:
-                        raise ObjectError(f"{label}: digest версии {n} не совпадает с локальным")
+                        raise ObjectError(f"{label}: the digest of version {n} does not match the local one")
                 else:
                     if digest is not None:
                         owner = conn.execute("SELECT object_id, n FROM object_version WHERE digest = %s",
                                              (digest,)).fetchone()
                         if owner is not None:
-                            raise ObjectError(f"{label}: digest версии {n} уже у объекта obj:{owner[0]} "
-                                              f"(версия {owner[1]})")
+                            raise ObjectError(f"{label}: the digest of version {n} already belongs to the object obj:{owner[0]} "
+                                              f"(version {owner[1]})")
                     conn.execute("INSERT INTO object_version (object_id, kind, n, digest, size, recorded_at) "
                                  "VALUES (%s, %s, %s, %s, %s, %s)",
                                  (object_id, kind, n, digest, v.get("size"), v.get("recorded_at") or at))
@@ -402,13 +402,13 @@ def adopt(conn: psycopg.Connection, store: ObjectStore, record: dict, *, files: 
                 # версия новая для базы, а копия уже есть (сбой прошлой попытки после копии): add_version сам
                 # примет то же содержимое или откатит иное — как у ingest
                 if head < n - 1:
-                    warnings.append(f"{label}: файл версии {n} не скопирован — в хранилище нет копии версии "
-                                    f"{head + 1}; источники этой версии останутся без файла")
+                    warnings.append(f"{label}: the file of version {n} is not copied — the store has no copy of version "
+                                    f"{head + 1}; sources of this version will stay without a file")
                     continue
                 store.add_version(object_id, n, file, record.get("original_name") or file.name, digest,
                                   user=agent, message=f"amemo: adopt {label}")
     except (psycopg.errors.IntegrityError, psycopg.errors.DataError) as e:      # ограничения таблиц, неверные даты
-        raise ObjectError(f"{label}: запись объекта не принята: {e.diag.message_primary}") from e
+        raise ObjectError(f"{label}: the object record is not accepted: {e.diag.message_primary}") from e
     return warnings
 
 
@@ -417,9 +417,9 @@ def _without_file(conn, kind: str, value: str, retrieved_at: date | None) -> Ver
     column = "url" if kind == "web" else "original_name"
     value = _nfc(value.strip())
     if not value:
-        raise ObjectError("пустой адрес или название источника")
+        raise ObjectError("an empty address or name of a source")
     if "\x00" in value:
-        raise ObjectError(f"{value!r}: в адресе или названии источника — символ NUL")
+        raise ObjectError(f"{value!r}: a NUL character in the address or the name of a source")
     with conn.transaction():
         at = _lock(conn)
         row = conn.execute(f"SELECT id FROM object WHERE kind = %s AND {column} = %s", (kind, value)).fetchone()
@@ -454,15 +454,15 @@ def _resolve_path(conn, store, docs, path: str, agent: str) -> Version:
         return ingest(conn, store, docs, path, agent=agent)
     for suffix in GUESS_SUFFIXES:
         if _locate(docs, path + suffix) is not None:
-            raise ObjectError(f"{path}: файла нет в папке документов — возможно, «{path}{suffix}»?")
+            raise ObjectError(f"{path}: no such file in the documents folder — maybe «{path}{suffix}»?")
     if _locate(docs, path, Path.is_dir) is not None:
-        raise ObjectError(f"{path}: это папка, а не файл")
+        raise ObjectError(f"{path}: this is a folder, not a file")
     if "/" in path and _locate(docs, PurePosixPath(path).parts[0], Path.is_dir) is not None:
-        raise ObjectError(f"{path}: файла нет в папке документов")
+        raise ObjectError(f"{path}: no such file in the documents folder")
     if URL.search(raw):
         return web(conn, raw)
     if DOMAIN.fullmatch(raw):
-        raise ObjectError(f"{raw}: похоже на адрес сайта — укажите его со схемой: https://{raw}")
+        raise ObjectError(f"{raw}: looks like a web address — give it with the scheme: https://{raw}")
     return message(conn, raw)
 
 
@@ -508,7 +508,7 @@ def extraction(conn: psycopg.Connection, store: ObjectStore, object_id: uuid.UUI
     object_id = object_uuid(object_id)
     row = conn.execute("SELECT digest FROM object_version WHERE object_id = %s AND n = %s", (object_id, n)).fetchone()
     if row is None:
-        raise ObjectError(f"obj:{object_id}: нет версии {n}", code="not_found")
+        raise ObjectError(f"obj:{object_id}: no version {n}", code="not_found")
     digest = row[0]
     if digest is None:
         return sources.Extracted(None)
@@ -544,11 +544,11 @@ def mark(conn: psycopg.Connection, object_id: uuid.UUID | str, status: str, *, a
     _require_autocommit(conn)
     object_id = object_uuid(object_id)
     if status not in STATUSES:
-        raise ObjectError(f"статус {status!r}: нужен один из {', '.join(sorted(STATUSES))}")
+        raise ObjectError(f"status {status!r}: one of {', '.join(sorted(STATUSES))} is required")
     with conn.transaction():
         conn.execute("INSERT INTO agent (id) VALUES (%s) ON CONFLICT (id) DO NOTHING", (agent,))
         if conn.execute("SELECT 1 FROM object WHERE id = %s FOR NO KEY UPDATE", (object_id,)).fetchone() is None:
-            raise ObjectError(f"obj:{object_id}: такого объекта нет", code="not_found")
+            raise ObjectError(f"obj:{object_id}: no such object", code="not_found")
         last = conn.execute("SELECT max(changed_at) FROM object_status WHERE object_id = %s", (object_id,)).fetchone()[0]
         conn.execute("INSERT INTO object_status (id, object_id, status, note, agent, changed_at) "
                      "VALUES (%s, %s, %s, %s, %s, %s)",
@@ -567,11 +567,11 @@ def _a1(cell_range: str) -> tuple[int, int, int, int]:
 
     m = _RANGE.match(cell_range.strip().replace("$", "").upper())
     if m is None:
-        raise ObjectError(f"диапазон {cell_range!r}: нужна запись A1, например B2:D10", code="invalid")
+        raise ObjectError(f"range {cell_range!r}: A1 notation is required, for example B2:D10", code="invalid")
     c1, r1, c2, r2 = m.group(1), int(m.group(2)), m.group(3) or m.group(1), int(m.group(4) or m.group(2))
     c1, c2 = column_index_from_string(c1), column_index_from_string(c2)
     if min(r1, r2) < 1 or max(r1, r2) > 1_048_576 or max(c1, c2) > 16_384 or r1 > r2 or c1 > c2:
-        raise ObjectError(f"диапазон {cell_range!r}: ячейки вне листа или начало правее и ниже конца", code="invalid")
+        raise ObjectError(f"range {cell_range!r}: cells outside the sheet, or the start is right of and below the end", code="invalid")
     return r1, c1, r2, c2
 
 
@@ -594,23 +594,23 @@ def sheet(conn: psycopg.Connection, store: ObjectStore, object_id: uuid.UUID | s
     r1, c1, r2, c2 = (1, 1, *SHEET_WINDOW) if default else _a1(cell_range)
     width, height = c2 - c1 + 1, r2 - r1 + 1
     if width * height > SHEET_MAX_CELLS:
-        raise ObjectError(f"диапазон {cell_range!r}: больше {SHEET_MAX_CELLS} ячеек", code="too_large")
+        raise ObjectError(f"range {cell_range!r}: over {SHEET_MAX_CELLS} cells", code="too_large")
     row = conn.execute("SELECT digest FROM object_version WHERE object_id = %s AND n = %s", (object_id, n)).fetchone()
     if row is None:
-        raise ObjectError(f"obj:{object_id}: нет версии {n}", code="not_found")
+        raise ObjectError(f"obj:{object_id}: no version {n}", code="not_found")
     if row[0] is None:
-        raise ObjectError(f"obj:{object_id}: у версии {n} нет файла", code="invalid")
+        raise ObjectError(f"obj:{object_id}: version {n} has no file", code="invalid")
     file = store.content(object_id, n)            # StoreError — не «не книга»: _BAD_FILE ловит и RuntimeError
     try:
         wb = load_workbook(file, read_only=True, data_only=True)
     except (InvalidFileException, *extract._BAD_FILE) as e:
-        raise ObjectError(f"obj:{object_id}: версия {n} не книга xlsx", code="invalid") from e
+        raise ObjectError(f"obj:{object_id}: version {n} is not an xlsx workbook", code="invalid") from e
     try:
         wanted = _nfc(name).casefold()
         found = [ws for ws in wb.worksheets if ws.title == name] or \
                 [ws for ws in wb.worksheets if _nfc(ws.title).casefold() == wanted]
         if not found:
-            raise ObjectError(f"obj:{object_id}: в версии {n} нет листа {name!r}", code="not_found")
+            raise ObjectError(f"obj:{object_id}: version {n} has no sheet {name!r}", code="not_found")
         ws = found[0]
         ws.reset_dimensions()                       # заявленный размер листа в файле бывает неверным
         rows: list[list[str]] = []
@@ -620,7 +620,7 @@ def sheet(conn: psycopg.Connection, store: ObjectStore, object_id: uuid.UUID | s
                     break
                 rows.append([extract._cell_text(c.value, getattr(c, "number_format", "")) for c in line][:width])
         except (InvalidFileException, *extract._BAD_FILE) as e:
-            raise ObjectError(f"obj:{object_id}: версия {n} не читается как xlsx", code="invalid") from e
+            raise ObjectError(f"obj:{object_id}: version {n} is not readable as xlsx", code="invalid") from e
     finally:
         wb.close()
     # окно целиком, даже за краем данных: пустые ячейки — ""; каждая строка — свой список
