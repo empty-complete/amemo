@@ -292,7 +292,7 @@ def test_inspect_too_large_is_413_and_removed(start, kb, tmp_path, monkeypatch):
     client = start(person=True)
     monkeypatch.setattr(http_v1, "UPLOAD_LIMIT", 4096)
     body = problem(upload(client, b"z" * 20000), 413, "too_large", "/bundles/inspect", "post")
-    assert "МиБ" in body["detail"]
+    assert "MiB" in body["detail"]
     assert list((state_dir(tmp_path) / "uploads").iterdir()) == []          # недокачанное удалено
     # быстрый отказ по Content-Length — тело не читается
     monkeypatch.setattr(http_v1, "FORM_LIMIT", 0)
