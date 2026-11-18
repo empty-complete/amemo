@@ -324,7 +324,7 @@ def test_serve_calls_service_and_refuses_open_address(run, kb):
     code, _, err = run("serve", "--host", "0.0.0.0", runner=lambda app, **kw: calls.append(kw))
     assert code == 2 and "AMEMO_TOKENS" in err and len(calls) == 1
     code, _, err = run("serve", "--host", "0.0.0.0", "--no-auth", runner=lambda app, **kw: calls.append(kw))
-    assert code == 0 and "БЕЗ ВХОДА" in err and calls[-1]["host"] == "0.0.0.0"
+    assert code == 0 and "WITHOUT SIGN-IN" in err and calls[-1]["host"] == "0.0.0.0"
     assert run("serve", extra={"AMEMO_DSN": None}, runner=lambda app, **kw: None)[0] == 1
     assert run("serve", "--host", "a:1", runner=lambda app, **kw: None)[0] == 2
 

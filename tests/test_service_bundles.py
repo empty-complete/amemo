@@ -500,7 +500,7 @@ def test_held_file_survives_removal_after_open(serve, kb, tmp_path):
     file.write_bytes(b"0123456789" * 10000)
 
     def held(request):
-        handle = http_v1._hold(file, "файла")
+        handle = http_v1._hold(file, "file")
         file.unlink()                                          # очистка успела после открытия
         return http_v1.HeldFile(handle, media_type="application/zip", filename="held.zip")
 

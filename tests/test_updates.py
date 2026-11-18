@@ -1075,7 +1075,7 @@ def test_stdio_mcp_answers_updated_and_finishes(env, kb, monkeypatch):
                 # вызов, на котором замечено обновление, выполняется как обычно; к ответу — «перезапустите агента»
                 assert not second.is_error and second.structured_content == first.structured_content
                 notice = second.content[-1].text
-                assert notice.startswith("amemo_updated:") and "перезапустите агента" in notice and NEXT in notice
+                assert notice.startswith("amemo_updated:") and "restart the agent" in notice and NEXT in notice
                 assert runtime.exiting
     anyio.run(main)
 

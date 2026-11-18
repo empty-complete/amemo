@@ -252,8 +252,8 @@ def test_submit_bad_bodies_are_400(start, kb, body, word):
 
 
 @pytest.mark.parametrize("raw, word", [
-    (b"", "тело"), (b"   ", "тело"), (b"[]", "объект"), (b"{", "не JSON"), (b'{"a": NaN}', "NaN"),
-    (b'{"a": Infinity}', "Infinity"), (b"\xff\xfe{", "не JSON"), (b"[" * 100_000, "вложенность"),
+    (b"", "body"), (b"   ", "body"), (b"[]", "object"), (b"{", "not JSON"), (b'{"a": NaN}', "NaN"),
+    (b'{"a": Infinity}', "Infinity"), (b"\xff\xfe{", "not JSON"), (b"[" * 100_000, "nested too deep"),
 ])
 def test_submit_body_that_is_not_a_json_object_is_400(start, raw, word):
     response = start().post(f"{V1}/submit", content=raw, headers={"Content-Type": "application/json"})

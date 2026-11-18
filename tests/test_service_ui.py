@@ -124,7 +124,7 @@ def test_package_without_build_404(serve, pg, monkeypatch, tmp_path):
     module.static_dir = lambda: tmp_path / "empty"
     monkeypatch.setitem(sys.modules, "amemo_web", module)
     body = problem(serve().get("/ui/"), 404, "not_found")
-    assert "сборки" in body["detail"]
+    assert "build" in body["detail"]
 
 
 def test_static_is_public_in_shared_service(serve, web, tmp_path):
