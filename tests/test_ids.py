@@ -72,5 +72,5 @@ def test_seed_at_counter_limit_moves_to_next_ms(monkeypatch):
 
 
 def test_seed_rejects_non_v7():
-    with pytest.raises(ValueError, match="не UUIDv7"):
+    with pytest.raises(ValueError, match="not a UUIDv7"):
         ids_mod.seed(uuid.uuid4())

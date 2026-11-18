@@ -24,7 +24,7 @@ def _at(value: datetime | None) -> datetime:
     if value is None:
         return datetime.now(timezone.utc)
     if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
-        raise ValueError("now должен быть datetime с часовым поясом")
+        raise ValueError("now must be a datetime with a time zone")
     return value
 
 
@@ -38,7 +38,7 @@ def _decayed_score(used_marks, now: datetime) -> float:
     for used_at in used_marks:
         age = (now - used_at).total_seconds()
         if age < 0:
-            raise ValueError("отметка полезности из будущего")
+            raise ValueError("a helpful mark from the future")
         total += 2 ** (-age / _HALF_LIFE_SECONDS)
     return total
 
@@ -96,7 +96,7 @@ def session_activity(conn: psycopg.Connection, label: str, *, now: datetime | No
     блокировкой метки: параллельные вызовы с одной меткой не создают двух задач."""
     records._require_autocommit(conn)
     if not isinstance(label, str) or not label.strip():
-        raise ValueError(f"метка задачи сессии {label!r}: нужна непустая строка")
+        raise ValueError(f"session task label {label!r}: a non-empty string is required")
     at = _at(now)
     with conn.transaction():
         conn.execute("SELECT pg_advisory_xact_lock(%s::int, hashtext(%s))", (SESSION_LOCK, label))
@@ -116,25 +116,25 @@ def mark_helpful(conn: psycopg.Connection, retrieval_id: uuid.UUID | str, refs: 
     records._require_autocommit(conn)
     selected_retrieval = records.as_uuid(retrieval_id, "retrieval_id")
     if activity is None:
-        raise ValueError("для отметки полезности нужна непустая activity")
+        raise ValueError("a helpful mark needs a non-empty activity")
     selected_activity = records.as_uuid(activity, "activity")
     at = _at(now)
     if isinstance(refs, str):
-        raise ValueError("refs должен быть последовательностью ссылок, не строкой")
+        raise ValueError("refs must be a sequence of references, not a string")
 
     atom_ids = []
     for ref in refs:
         if not isinstance(ref, str) or not ref.startswith("atm:") or ref.count(":") != 1:
-            raise ValueError(f"{ref!r}: полезность отмечается только для атомов выдачи")
+            raise ValueError(f"{ref!r}: only atoms of the result can be marked helpful")
         atom_ids.append(records.as_uuid(ref.split(":", 1)[1], "atom ref"))
     unique_atom_ids = list(dict.fromkeys(atom_ids))
 
     with conn.transaction():
         row = conn.execute("SELECT activity FROM retrieval WHERE id = %s", (selected_retrieval,)).fetchone()
         if row is None:
-            raise ValueError(f"retrieval {selected_retrieval}: такой выдачи нет")
+            raise ValueError(f"retrieval {selected_retrieval}: no such result")
         if row[0] is None or row[0] != selected_activity:
-            raise ValueError("activity отметки должна совпадать с непустой activity выдачи")
+            raise ValueError("the activity of the mark must be the non-empty activity of the result")
         if unique_atom_ids:
             rows = conn.execute(
                 "SELECT atom_id FROM retrieval_item WHERE retrieval_id = %s AND atom_id = ANY(%s::uuid[])",
@@ -142,7 +142,7 @@ def mark_helpful(conn: psycopg.Connection, retrieval_id: uuid.UUID | str, refs: 
             allowed = {item[0] for item in rows}
             foreign = [atom_id for atom_id in unique_atom_ids if atom_id not in allowed]
             if foreign:
-                raise ValueError(f"atm:{foreign[0]}: атом не входит в эту выдачу")
+                raise ValueError(f"atm:{foreign[0]}: the atom is not in this result")
             records._ensure_agent(conn, agent)
             with conn.cursor() as cur:
                 cur.executemany(

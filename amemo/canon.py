@@ -64,7 +64,7 @@ def _normalize(value: Any, problems: list[str], where: str = "") -> Any:
     """Копия значения: строки и ключи в NFC, большие целые — числом с плавающей точкой. Вход не меняется."""
     if isinstance(value, str):
         if "\x00" in value:
-            problems.append(f"{where}: символ \\u0000 — PostgreSQL его не хранит")
+            problems.append(f"{where}: the character \\u0000 — PostgreSQL does not store it")
         return _nfc(value)
     if isinstance(value, bool):
         return value
@@ -72,18 +72,18 @@ def _normalize(value: Any, problems: list[str], where: str = "") -> Any:
         try:
             as_float = float(value)
         except OverflowError:
-            problems.append(f"{where}: целое из {len(str(abs(value)))} цифр больше любого числа JSON")
+            problems.append(f"{where}: an integer of {len(str(abs(value)))} digits is greater than any JSON number")
             return value
         # jsonb возвращает самую короткую десятичную запись числа — такое целое и есть это число
         if int(Decimal(repr(as_float))) != value:
-            problems.append(f"{where}: целое {value} не записать числом JSON без потерь")
+            problems.append(f"{where}: the integer {value} cannot be written as a JSON number without loss")
         return as_float
     if isinstance(value, dict):
         out = {}
         for key, item in value.items():
             nfc = _nfc(key)
             if nfc in out:
-                problems.append(f"{where}: ключи {key!r} совпадают после приведения к NFC")
+                problems.append(f"{where}: the keys {key!r} coincide after normalization to NFC")
             out[nfc] = _normalize(item, problems, f"{where}.{nfc}" if where else nfc)
         return out
     if isinstance(value, list):
@@ -130,20 +130,20 @@ def values_at(body: dict, path: str) -> Iterator[tuple[str, Any]]:
 def canonical(payload: dict, target: str) -> dict:
     """Каноническое тело ревизии атома или сущности; CanonError — если ссылки или источники не разрешены."""
     if target not in REF_FIELDS:
-        raise CanonError(f"неизвестный вид записи {target!r}: нужен atom или entity")
+        raise CanonError(f"unknown record target {target!r}: atom or entity is required")
     problems: list[str] = []
     body = _clean(_normalize({k: v for k, v in payload.items() if k != "ref"}, problems))
     for i, source in enumerate(body.get("sources", [])):
         if "object" not in source:
-            problems.append(f"sources[{i}]: нет object — источник не разрешён в объект")
+            problems.append(f"sources[{i}]: no object — the source is not resolved to an object")
         elif "object_version" not in source:
-            problems.append(f"sources[{i}]: нет object_version")
+            problems.append(f"sources[{i}]: no object_version")
         source.pop("path", None)
     for path, prefix in REF_FIELDS[target].items():
         for where, ref in values_at(body, path):
             m = CANON_REF.fullmatch(ref) if isinstance(ref, str) else None
             if not m or m.group(1) != prefix:
-                problems.append(f"{where}: ссылка {ref!r} — нужна {prefix}:<UUIDv7>")
+                problems.append(f"{where}: reference {ref!r} — {prefix}:<UUIDv7> is required")
     if problems:
         raise CanonError("; ".join(problems))
     return body
@@ -158,5 +158,5 @@ def content_hash(body: dict) -> str:
     try:
         text = rfc8785.dumps(data)
     except rfc8785.CanonicalizationError as e:
-        raise CanonError(f"тело не записать по RFC 8785: {e}") from e
+        raise CanonError(f"the body cannot be written by RFC 8785: {e}") from e
     return f"sha256-{CANON_VERSION}:" + hashlib.sha256(text).hexdigest()

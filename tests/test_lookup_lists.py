@@ -159,7 +159,7 @@ def test_recipes_and_card_unknown_key_is_not_found(kb):
     for name, call in calls.items():
         with pytest.raises(RecordNotFound):
             call()
-    with pytest.raises(RecordError, match="сущност"):
+    with pytest.raises(RecordError, match="entity"):
         profile.card(kb, "atm:wind_load")                                   # карточка — только у сущности
 
 

@@ -27,7 +27,7 @@ def marked(text: str) -> bool:
 def strip(text: str) -> str:
     """Текст без частей в <private>…</private>; остальное — как было, пробелы вокруг не сжимаются."""
     if not isinstance(text, str):
-        raise TypeError(f"private.strip: нужна строка, получено {type(text).__name__}")
+        raise TypeError(f"private.strip: a string is required, got {type(text).__name__}")
     kept, depth, start = [], 0, 0
     for tag in _TAG.finditer(text):
         closing = tag.group(1) == "/"
@@ -87,7 +87,7 @@ def _password_value(value: str) -> bool:
 def secret_like(text: str) -> list[str]:
     """Виды секретов, похожих на найденные в тексте (по порядку SECRETS, без повторов); пусто — ничего похожего."""
     if not isinstance(text, str):
-        raise TypeError(f"private.secret_like: нужна строка, получено {type(text).__name__}")
+        raise TypeError(f"private.secret_like: a string is required, got {type(text).__name__}")
     found = []
     for name, pattern in SECRETS.items():
         if name == "password":

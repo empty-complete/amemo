@@ -51,8 +51,8 @@ BAD = {
     "extends_missing": ({"memo": _t("memo", applies_to="memo", extends=["nope"])}, r"memo\.yaml.*nope"),
     "extends_other_target": ({"memo": _t("memo", applies_to="memo", extends=["ent_base"]),
                               "ent_base": _t("ent_base", target="entity")}, r"memo\.yaml.*ent_base.*entity"),
-    "cycle": ({"a": _t("a", extends=["b"]), "b": _t("b", extends=["a"])}, r"b\.yaml.*цикл.*a → b → a"),
-    "self_cycle": ({"a": _t("a", extends=["a"])}, r"a\.yaml.*цикл.*a → a"),
+    "cycle": ({"a": _t("a", extends=["b"]), "b": _t("b", extends=["a"])}, r"b\.yaml.*cycle.*a → b → a"),
+    "self_cycle": ({"a": _t("a", extends=["a"])}, r"a\.yaml.*cycle.*a → a"),
     "applies_to_unknown": ({"memo": _t("memo", applies_to="nope")}, r"memo\.yaml.*applies_to nope"),
     "applies_to_other_scheme": ({"memo": _t("memo", target="entity", applies_to="memo")},
                                 r"memo\.yaml.*applies_to memo"),
@@ -81,11 +81,11 @@ def test_bad_template_is_rejected_with_file(tmp_path, case):
 
 
 @pytest.mark.parametrize("path, match", [
-    ("content.vals", "у Content нет поля vals"),
-    ("sources.selectors", r"\[\] ставится"),                   # у промежуточного списка нет []
-    ("content[].values", r"\[\] ставится"),                    # [] у поля, которое не список
-    ("sources[].selectors[]", r"\[\] у последнего поля"),
-    ("label.ru.x", "ru.*не класс"),                            # за строкой полей нет
+    ("content.vals", "Content has no field vals"),
+    ("sources.selectors", r"\[\] goes exactly"),                   # у промежуточного списка нет []
+    ("content[].values", r"\[\] goes exactly"),                    # [] у поля, которое не список
+    ("sources[].selectors[]", r"\[\] is not needed at the last field"),
+    ("label.ru.x", "ru.*not a class"),                            # за строкой полей нет
 ])
 def test_bad_rule_path_is_rejected(tmp_path, path, match):
     bad = _pack(tmp_path / "bad", "bad", {"memo": _t("memo", fields=[{"path": path, "required": True}])})
@@ -103,13 +103,13 @@ def test_check_path_returns_last_field():
 def test_template_code_in_two_packs_is_rejected(tmp_path):
     a = _pack(tmp_path / "a", "pack_a", {"memo": _t("memo", applies_to="memo")}, kinds=["memo"])
     b = _pack(tmp_path / "b", "pack_b", {"memo_b": _t("memo")})
-    with pytest.raises(packs.PackError, match=r"memo_b\.yaml.*шаблон memo.*pack_a"):
+    with pytest.raises(packs.PackError, match=r"memo_b\.yaml.*template memo.*pack_a"):
         packs.load_packs([packs.CORE_PACK, a, b])
 
 
 def test_template_overriding_core_is_rejected(tmp_path):
     other = _pack(tmp_path / "other", "other", {"label": _t("has_label")})
-    with pytest.raises(packs.PackError, match=r"label\.yaml.*шаблон has_label.*core"):
+    with pytest.raises(packs.PackError, match=r"label\.yaml.*template has_label.*core"):
         packs.load_packs([packs.CORE_PACK, other])
 
 

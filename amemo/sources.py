@@ -170,7 +170,7 @@ def _ocr(doc, pages: list[str], scans: list[int]) -> tuple[set[int], set[int]]:
             text = page.get_text(textpage=page.get_textpage_ocr(language=setup.languages, full=False,
                                                                  tessdata=str(setup.tessdata)))
         except pymupdf.mupdf.FzErrorBase as e:
-            raise OcrError(f"страница {i + 1}: {e}") from e
+            raise OcrError(f"page {i + 1}: {e}") from e
         if len(text.strip()) > len(pages[i].strip()):
             pages[i] = text
             ocr.add(i + 1)

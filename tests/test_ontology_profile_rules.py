@@ -33,11 +33,11 @@ def test_ontology_pack_loads():
 
 
 @pytest.mark.parametrize("parameters, message", [
-    ([{"property": "nope"}], "property nope — нет в словаре property"),
-    ([{"property": "mass", "origin": "rumor"}], "origin rumor — нет в словаре parameter_origin"),
-    ([{"property": "mass", "default": {"amount": 1, "unit": "kilos"}}], "default.unit kilos — не код UCUM"),
-    ([{"property": "mass", "default": {"amount": 1, "unit": "m"}}], "default.unit m не переводится в kg"),
-    ([{"property": "mass"}, {"property": "mass"}], "property mass повторяется"),
+    ([{"property": "nope"}], "property nope — not in the property vocabulary"),
+    ([{"property": "mass", "origin": "rumor"}], "origin rumor — not in the parameter_origin vocabulary"),
+    ([{"property": "mass", "default": {"amount": 1, "unit": "kilos"}}], "default.unit kilos — not a UCUM code"),
+    ([{"property": "mass", "default": {"amount": 1, "unit": "m"}}], "default.unit m does not convert to kg"),
+    ([{"property": "mass"}, {"property": "mass"}], "property mass repeats"),
 ])
 def test_bad_parameters_name_file(tmp_path, parameters, message):
     root = _with_template(tmp_path, _entity_template(parameters=parameters))
@@ -49,7 +49,7 @@ def test_bad_parameters_name_file(tmp_path, parameters, message):
 def test_parameters_only_for_entities(tmp_path):
     body = {"code": "t", "version": "1.0.0", "target": "atom", "parameters": [{"property": "mass"}]}
     root = _with_template(tmp_path, body)
-    with pytest.raises(packs.PackError, match="parameters — только у шаблонов target entity"):
+    with pytest.raises(packs.PackError, match="parameters — only for templates with target entity"):
         packs.load_packs([packs.CORE_PACK, QUANTITIES, root])
 
 
@@ -90,5 +90,5 @@ def test_default_of_property_without_unit_is_checked_only_for_ucum(tmp_path):
     ok = _with_properties(tmp_path / "ok", [{"property": "ratio", "default": {"amount": 0.5, "unit": "1"}}])
     assert packs.load_packs([packs.CORE_PACK, QUANTITIES, ok])[-1].templates[0].parameters[0].default.amount == 0.5
     bad = _with_properties(tmp_path / "bad", [{"property": "ratio", "default": {"amount": 1, "unit": "kilos"}}])
-    with pytest.raises(packs.PackError, match="default.unit kilos — не код UCUM"):
+    with pytest.raises(packs.PackError, match="default.unit kilos — not a UCUM code"):
         packs.load_packs([packs.CORE_PACK, QUANTITIES, bad])

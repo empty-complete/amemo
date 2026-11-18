@@ -48,7 +48,7 @@ def seed(last: uuid.UUID) -> None:
     Без seed после перезапуска с часами, ушедшими назад (WSL2 после сна), новые id оказались бы меньше
     уже записанных."""
     if last.version != 7 or last.variant != uuid.RFC_4122:
-        raise ValueError(f"seed: не UUIDv7: {last}")
+        raise ValueError(f"seed: not a UUIDv7: {last}")
     global _last_ms, _seq
     ms, seq = last.int >> 80, (last.int >> 64) & 0xFFF
     with _lock:

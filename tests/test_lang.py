@@ -24,7 +24,7 @@ ONLY_RU = {"ru": "Высота мачты станции"}
 def test_check():
     assert [lang.check(v) for v in (None, "", "ru", "EN", " en ")] == [None, None, "ru", "en", "en"]
     for bad in ("de", "en-GB", 1, ["en"]):
-        with pytest.raises(lang.LangError, match="допустимы ru, en"):
+        with pytest.raises(lang.LangError, match="allowed are ru, en"):
             lang.check(bad)
 
 
@@ -126,7 +126,7 @@ def test_labels_follow_language(kb):
     listed = {item["ref"]: item["label"] for item in lookup.list_records(kb, lang="en")["items"]}
     assert listed == {both: BOTH["en"], only_en: ONLY_EN["en"], only_ru: ONLY_RU["ru"]}
     assert lookup.summary(kb, both, lang="en")["label"] == BOTH["en"]
-    with pytest.raises(RecordError, match="допустимы ru, en"):
+    with pytest.raises(RecordError, match="allowed are ru, en"):
         lookup.labels(kb, refs, lang="de")
 
 

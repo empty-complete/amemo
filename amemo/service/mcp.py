@@ -247,7 +247,7 @@ def build(runtime: Runtime) -> MCPServer:
         try:
             caller = runtime.caller(ctx)
             if write and not caller.can_write:
-                raise _Refused(403, "read_only", f"вход {caller.agent} — только для чтения")
+                raise _Refused(403, "read_only", f"the login {caller.agent} is read-only")
             try:
                 language = lang_.check(lang) or runtime.settings.lang
             except lang_.LangError as e:
@@ -304,7 +304,7 @@ def build(runtime: Runtime) -> MCPServer:
             lang: Lang = None) -> CallToolResult:
         def work(conn, caller):
             if (ref in (None, "")) == (query in (None, "")):
-                raise api.BadRequest("amemo_similar: нужен ровно один из параметров query (текст) или ref (запись)")
+                raise api.BadRequest("amemo_similar: exactly one of query (text) or ref (record) is required")
             started = time.monotonic()
             found = api.pick(conn, ref) if ref not in (None, "") else None
             result = api.similar(conn, agent=caller.agent, ref=found, q=query, limit=limit,
@@ -332,7 +332,7 @@ def build(runtime: Runtime) -> MCPServer:
             lang: Lang = None) -> CallToolResult:
         def work(conn, caller):
             if not isinstance(refs, list) or not refs or len(refs) > GET_MAX:
-                raise api.BadRequest(f"refs: нужен список от 1 до {GET_MAX} ссылок")
+                raise api.BadRequest(f"refs: a list of 1 to {GET_MAX} references is required")
             out = []
             for ref in refs:
                 try:
@@ -490,7 +490,7 @@ def build(runtime: Runtime) -> MCPServer:
             entries = api.vocab_entries(conn, scheme)
             if not entries:          # HTTP отдаёт пустой список; модели полезнее знать, какие схемы есть
                 known = [r[0] for r in conn.execute("SELECT DISTINCT scheme FROM concept ORDER BY 1")]
-                raise api.BadRequest(f"схемы словаря {scheme!r} нет: есть {', '.join(known)}")
+                raise api.BadRequest(f"no vocabulary scheme {scheme!r}: there are {', '.join(known)}")
             return {"scheme": scheme, "entries": entries}
         return await call(ctx, work)
 

@@ -154,7 +154,7 @@ def test_export_errors(start, kb, pg):
     # антология без проверенного — BundleError → 422; папки подборки после отказа нет
     body = problem(client.post(f"{V1}{path}", json={"selection": {"tags": ["нет такого"]}, "anthology": True}),
                    422, "bundle_invalid", path, "post")
-    assert "антология пуста" in body["detail"]
+    assert "the anthology is empty" in body["detail"]
     # ссылка на запись, которой нет, — тоже отказ библиотеки
     problem(client.post(f"{V1}{path}", json={"selection": {"refs": [f"atm:{uuid.uuid4()}"]}}), 422,
             "bundle_invalid", path, "post")

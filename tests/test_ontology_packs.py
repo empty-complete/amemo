@@ -39,32 +39,32 @@ def test_requires_satisfied_and_ordered(tmp_path):
 
 def test_requires_missing_names_pack(tmp_path):
     a = _pack(tmp_path / "a", "a", requires={"quantities": ">=1.0.0"})
-    with pytest.raises(packs.PackError, match="пакет a требует quantities >=1.0.0"):
+    with pytest.raises(packs.PackError, match="the pack a requires quantities >=1.0.0"):
         packs.load_packs([packs.CORE_PACK, a])
 
 
 def test_requires_version_out_of_range(tmp_path):
     a = _pack(tmp_path / "a", "a", requires={"quantities": ">=2.0.0"})
-    with pytest.raises(packs.PackError, match="загружен 1.0.0"):
+    with pytest.raises(packs.PackError, match="1.0.0 is loaded"):
         packs.load_packs([packs.CORE_PACK, a, QUANTITIES])
 
 
 def test_requires_cycle(tmp_path):
     a = _pack(tmp_path / "a", "a", requires={"b": ">=1.0.0"})
     b = _pack(tmp_path / "b", "b", requires={"a": ">=1.0.0"})
-    with pytest.raises(packs.PackError, match="цикл.*a → b → a|цикл.*b → a → b"):
+    with pytest.raises(packs.PackError, match="cycle.*a → b → a|cycle.*b → a → b"):
         packs.load_packs([packs.CORE_PACK, a, b])
 
 
 def test_requires_core_explicit_is_checked(tmp_path):
     a = _pack(tmp_path / "a", "a", requires={"core": ">=9.0.0"})
-    with pytest.raises(packs.PackError, match="требует core >=9.0.0"):
+    with pytest.raises(packs.PackError, match="requires core >=9.0.0"):
         packs.load_packs([packs.CORE_PACK, a])
 
 
 def test_bad_requires_shape(tmp_path):
     a = _pack(tmp_path / "a", "a", requires=["quantities"])
-    with pytest.raises(packs.PackError, match="requires: ожидается отображение"):
+    with pytest.raises(packs.PackError, match="requires: a mapping"):
         packs.load_packs([packs.CORE_PACK, a])
 
 
@@ -76,7 +76,7 @@ def test_bad_requires_specifier(tmp_path):
 
 def test_broader_must_exist(tmp_path):
     a = _pack(tmp_path / "a", "a", vocab={"kind": [_kind("idea", broader="thought")]})
-    with pytest.raises(packs.PackError, match="broader thought — нет в словаре kind"):
+    with pytest.raises(packs.PackError, match="broader thought — not in the kind vocabulary"):
         packs.load_packs([packs.CORE_PACK, a])
 
 
@@ -105,7 +105,7 @@ def test_requires_accepts_prerelease(tmp_path):
 
 def test_missing_core_is_pack_error(tmp_path):
     a = _pack(tmp_path / "a", "a")
-    with pytest.raises(packs.PackError, match="ядро"):
+    with pytest.raises(packs.PackError, match="the core"):
         packs.load_packs([a])
-    with pytest.raises(packs.PackError, match="ядро"):
+    with pytest.raises(packs.PackError, match="the core"):
         packs._ordered([packs.load_pack(a)])

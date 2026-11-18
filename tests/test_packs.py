@@ -90,21 +90,21 @@ def test_bad_vocabulary_file_names_the_file(tmp_path):
 
 def test_core_override_is_rejected(tmp_path):
     other = _pack(tmp_path, "other", code="fact")
-    with pytest.raises(packs.PackError, match="переопределение кода ядра"):
+    with pytest.raises(packs.PackError, match="redefines a code of the core"):
         packs.load_packs([packs.CORE_PACK, other])
 
 
 def test_two_packs_one_code_is_rejected(tmp_path):
     a = _pack(tmp_path / "a", "pack_a", definition="Одно определение.")
     b = _pack(tmp_path / "b", "pack_b", definition="Другое определение.")
-    with pytest.raises(packs.PackError, match="pack_b.*уже задаёт пакет pack_a"):
+    with pytest.raises(packs.PackError, match="pack_b.*already defined by the pack pack_a"):
         packs.load_packs([packs.CORE_PACK, a, b])
 
 
 def test_pack_twice_is_rejected(tmp_path):
     a = _pack(tmp_path / "a", "pack_a")
     b = _pack(tmp_path / "b", "pack_a")
-    with pytest.raises(packs.PackError, match="встречается дважды"):
+    with pytest.raises(packs.PackError, match="occurs twice"):
         packs.load_packs([packs.CORE_PACK, a, b])
 
 

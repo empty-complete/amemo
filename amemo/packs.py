@@ -87,7 +87,7 @@ def _read(path: Path):
     try:
         return yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as e:
-        raise PackError(f"{path}: ошибка YAML: {e}") from e
+        raise PackError(f"{path}: YAML error: {e}") from e
 
 
 def _text(ann: dict, key: str) -> dict | None:
@@ -106,7 +106,7 @@ def service_concepts() -> list[Concept]:
             where = f"{SCHEMA_FILE.name}: {enum_name}.{code}"
             unknown = set(ann) - ANNOTATIONS
             if unknown:
-                raise PackError(f"{where}: неизвестные аннотации {sorted(unknown)}")
+                raise PackError(f"{where}: unknown annotations {sorted(unknown)}")
             data = {"scheme": scheme, "code": code, "label": _text(ann, "label"),
                     "definition": _text(ann, "definition"), "inverse_label": _text(ann, "inverse_label")}
             try:
@@ -149,17 +149,17 @@ def check_path(path: str, target: str) -> dict:
     for i, segment in enumerate(segments):
         name, each = segment.removesuffix("[]"), segment.endswith("[]")
         if class_name not in classes:
-            raise PackError(f"{path}: поле {field} — {class_name}, а не класс; дальше по пути идти некуда")
+            raise PackError(f"{path}: the field {field} is {class_name}, not a class; the path cannot go further")
         attrs = field_attrs(class_name)
         if name not in attrs:
-            raise PackError(f"{path}: у {class_name} нет поля {name}")
+            raise PackError(f"{path}: {class_name} has no field {name}")
         slot = attrs[name] or {}
         if i == len(segments) - 1:
             if each:
-                raise PackError(f"{path}: [] у последнего поля не нужен — правило относится ко всему списку")
+                raise PackError(f"{path}: [] is not needed at the last field — the rule covers the whole list")
         elif each != bool(slot.get("multivalued")):
-            raise PackError(f"{path}: [] ставится ровно у промежуточных списков, а {name} "
-                            f"{'— список' if slot.get('multivalued') else 'не список'}")
+            raise PackError(f"{path}: [] goes exactly at intermediate lists, and {name} "
+                            f"{'is a list' if slot.get('multivalued') else 'is not a list'}")
         class_name, field = slot.get("range", "string"), name
     return slot
 
@@ -172,12 +172,12 @@ def _check_template(t: Template, file: Path, by_code: dict[str, Template], codes
     иначе карточка покажет число, которое не с чем сравнить."""
     target = t.target
     if t.applies_to and t.applies_to not in codes.get(APPLIES_TO[target], set()):
-        raise PackError(f"{file}: applies_to {t.applies_to} — нет в словаре {APPLIES_TO[target]} загружаемых пакетов")
+        raise PackError(f"{file}: applies_to {t.applies_to} — not in the {APPLIES_TO[target]} vocabulary of the loaded packs")
     for parent in t.extends or []:
         if parent not in by_code:
-            raise PackError(f"{file}: extends: нет шаблона {parent}")
+            raise PackError(f"{file}: extends: no template {parent}")
         if by_code[parent].target != t.target:
-            raise PackError(f"{file}: extends: {parent} — шаблон для {by_code[parent].target}, а не для {target}")
+            raise PackError(f"{file}: extends: {parent} is a template for {by_code[parent].target}, not for {target}")
 
     def unknown(scheme: str, values) -> list[str]:
         return [v for v in values or [] if v not in codes.get(scheme, set())]
@@ -189,15 +189,15 @@ def _check_template(t: Template, file: Path, by_code: dict[str, Template], codes
             raise PackError(f"{file}: {e}") from e
         for attr, scheme in (("selector_types", "selector_type"), ("entity_classes", "entity_class")):
             if bad := unknown(scheme, getattr(rule, attr)):
-                raise PackError(f"{file}: {rule.path}: {attr} {bad} — нет в словаре {scheme} загружаемых пакетов")
+                raise PackError(f"{file}: {rule.path}: {attr} {bad} — not in the {scheme} vocabulary of the loaded packs")
     links = t.links
     if links is not None:
         rels = list(links.allowed or []) + [req.rel for req in links.required or []]
         if bad := unknown("rel", rels):
-            raise PackError(f"{file}: links: виды связей {bad} — нет в словаре rel загружаемых пакетов")
+            raise PackError(f"{file}: links: link types {bad} — not in the rel vocabulary of the loaded packs")
         for req in links.required or []:
             if bad := unknown("entity_class", req.to_classes):
-                raise PackError(f"{file}: links: {req.rel}: to_classes {bad} — нет в словаре entity_class")
+                raise PackError(f"{file}: links: {req.rel}: to_classes {bad} — not in the entity_class vocabulary")
     _check_parameters(t, file, codes, properties)
     _check_ui(t, file, by_code, codes)
 
@@ -227,49 +227,49 @@ def _check_ui(t: Template, file: Path, by_code: dict[str, Template], codes: dict
     if t.ui is None:
         return
     if t.target not in UI_BASE:
-        raise PackError(f"{file}: ui — только у шаблонов atom и entity, а не {t.target}")
+        raise PackError(f"{file}: ui — only for templates of atom and entity, not {t.target}")
     allowed = _rule_paths(t, by_code) | set(UI_BASE[t.target])
     seen: set[str] = set()
     for field in t.ui.fields or []:
-        where = f"{file}: шаблон {t.code}: ui.fields: {field.path}"
+        where = f"{file}: template {t.code}: ui.fields: {field.path}"
         if field.path in seen:
-            raise PackError(f"{where} — путь повторяется")
+            raise PackError(f"{where} — the path repeats")
         seen.add(field.path)
         prop = UI_PROPERTY.fullmatch(field.path)
         if prop is not None:
             if t.target != "atom":
-                raise PackError(f"{where} — величины есть только у тела атома")
+                raise PackError(f"{where} — only the body of an atom has properties")
             if prop.group(2) not in codes.get("property", set()):
-                raise PackError(f"{where} — property {prop.group(2)} нет в словаре property загружаемых пакетов")
+                raise PackError(f"{where} — property {prop.group(2)} is not in the property vocabulary of the loaded packs")
         elif field.path not in allowed:
-            raise PackError(f"{where} — нет правила с таким путём ни у шаблона, ни у его предков и интерфейсов")
+            raise PackError(f"{where} — no rule with this path in the template, its ancestors or interfaces")
         elif field.required is not None:
-            raise PackError(f"{where} — required в ui только у величины: обязательность поля задаёт его правило")
+            raise PackError(f"{where} — required in ui is only for a property: whether a field is required is set by its rule")
 
 
 def _check_parameters(t: Template, file: Path, codes: dict[str, set[str]], properties: dict[str, str | None]) -> None:
     """Раздел parameters: профиль бывает только у сущностей, величина и origin — из словарей, умолчание — в UCUM."""
     params = t.parameters or []
     if params and t.target != "entity":
-        raise PackError(f"{file}: parameters — только у шаблонов target entity")
+        raise PackError(f"{file}: parameters — only for templates with target entity")
     seen: set[str] = set()
     for rule in params:
         where = f"{file}: parameters: {rule.property}"
         if rule.property in seen:                # сведение идёт по property: повтор в одном шаблоне — двусмысленность
-            raise PackError(f"{file}: parameters: property {rule.property} повторяется")
+            raise PackError(f"{file}: parameters: property {rule.property} repeats")
         seen.add(rule.property)
         if rule.property not in codes.get("property", set()):
-            raise PackError(f"{file}: parameters: property {rule.property} — нет в словаре property загружаемых пакетов")
+            raise PackError(f"{file}: parameters: property {rule.property} — not in the property vocabulary of the loaded packs")
         if rule.origin and rule.origin not in codes.get("parameter_origin", set()):
-            raise PackError(f"{where}: origin {rule.origin} — нет в словаре parameter_origin загружаемых пакетов")
+            raise PackError(f"{where}: origin {rule.origin} — not in the parameter_origin vocabulary of the loaded packs")
         default = rule.default
         if default is not None and default.unit is not None:
             from .check import units             # локальный импорт: units тянет pint, загрузке без умолчаний он не нужен
             if not units.is_ucum(default.unit):
-                raise PackError(f"{where}: default.unit {default.unit} — не код UCUM")
+                raise PackError(f"{where}: default.unit {default.unit} — not a UCUM code")
             prop_unit = properties.get(rule.property)
             if prop_unit and units.convert(1.0, default.unit, prop_unit) is None:
-                raise PackError(f"{where}: default.unit {default.unit} не переводится в {prop_unit}")
+                raise PackError(f"{where}: default.unit {default.unit} does not convert to {prop_unit}")
 
 
 def _check_templates(packs: list[Pack]) -> None:
@@ -287,11 +287,11 @@ def _check_templates(packs: list[Pack]) -> None:
         for t in p.templates:
             file = p.template_files[t.code]
             if t.code in by_code:
-                raise PackError(f"{file}: шаблон {t.code} уже задаёт пакет {owner[t.code]} ({files[t.code]})")
+                raise PackError(f"{file}: the template {t.code} is already defined by the pack {owner[t.code]} ({files[t.code]})")
             if t.applies_to:
                 pair = (t.target, t.applies_to)
                 if pair in pairs:
-                    raise PackError(f"{file}: шаблон для {pair[0]} {pair[1]} уже задаёт {pairs[pair]} "
+                    raise PackError(f"{file}: a template for {pair[0]} {pair[1]} is already defined by {pairs[pair]} "
                                     f"({files[pairs[pair]]})")
                 pairs[pair] = t.code
             by_code[t.code], files[t.code], owner[t.code] = t, file, p.name
@@ -306,7 +306,7 @@ def _check_templates(packs: list[Pack]) -> None:
         for parent in by_code[code].extends or []:
             if parent in chain + (code,):
                 loop = chain[chain.index(parent):] if parent in chain else ()
-                raise PackError(f"{files[code]}: цикл в extends: {' → '.join(loop + (code, parent))}")
+                raise PackError(f"{files[code]}: a cycle in extends: {' → '.join(loop + (code, parent))}")
             walk(parent, chain + (code,))
         done.add(code)
 
@@ -335,11 +335,11 @@ def load_pack(path: Path) -> Pack:
     path = Path(path)
     manifest = _read(path / "pack.yaml")
     if not isinstance(manifest, dict) or not manifest.get("name") or not manifest.get("version"):
-        raise PackError(f"{path / 'pack.yaml'}: нужны name и version")
+        raise PackError(f"{path / 'pack.yaml'}: name and version are required")
     name, version = str(manifest["name"]), str(manifest["version"])
     requires = manifest.get("requires") or {}
     if not isinstance(requires, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in requires.items()):
-        raise PackError(f"{path / 'pack.yaml'}: requires: ожидается отображение имя → диапазон версий")
+        raise PackError(f"{path / 'pack.yaml'}: requires: a mapping name → version range is expected")
     for dep, spec in requires.items():
         try:
             SpecifierSet(spec)
@@ -350,7 +350,7 @@ def load_pack(path: Path) -> Pack:
     for file in sorted((path / "vocab").glob("*.yaml")) if (path / "vocab").is_dir() else []:
         data = _read(file)
         if not isinstance(data, dict) or not data.get("scheme") or not data.get("concepts"):
-            raise PackError(f"{file}: нужны scheme и непустой список concepts")
+            raise PackError(f"{file}: scheme and a non-empty list of concepts are required")
         for c in data["concepts"]:
             code = c.get("code", "?") if isinstance(c, dict) else "?"
             try:
@@ -360,8 +360,8 @@ def load_pack(path: Path) -> Pack:
             except (TypeError, ValueError) as e:
                 raise PackError(f"{file}: {code}: {e}") from e
             if concept.family is not None and concept.scheme != "kind":
-                raise PackError(f"{file}: {code}: family бывает только у вида атома (scheme kind), "
-                                f"а не у {concept.scheme}")
+                raise PackError(f"{file}: {code}: only an atom kind (scheme kind) has a family, "
+                                f"not {concept.scheme}")
             concepts.append(concept)
 
     templates, template_files = [], {}
@@ -372,7 +372,7 @@ def load_pack(path: Path) -> Pack:
         except ValueError as e:
             raise PackError(f"{file}: {e}") from e
         if t.code in template_files:
-            raise PackError(f"{file}: шаблон {t.code} уже задан в {template_files[t.code].name}")
+            raise PackError(f"{file}: the template {t.code} is already defined in {template_files[t.code].name}")
         templates.append(t)
         template_files[t.code] = file
 
@@ -385,18 +385,18 @@ def _ordered(packs: list[Pack]) -> list[Pack]:
     """Ядро первым, дальше — топологический порядок по requires; версии проверены; цикл — ошибка с цепочкой."""
     by_name = {p.name: p for p in packs}
     if "core" not in by_name:
-        raise PackError("ядро (пакет core) обязательно")
+        raise PackError("the core (the pack core) is required")
     for p in packs:
         for dep, spec in p.requires.items():
             if dep not in by_name:
-                raise PackError(f"пакет {p.name} требует {dep} {spec}, он не загружается")
+                raise PackError(f"the pack {p.name} requires {dep} {spec}, which is not being loaded")
             try:
                 have = Version(by_name[dep].version)
             except InvalidVersion as e:
-                raise PackError(f"пакет {dep}: версия {by_name[dep].version!r} — не semver") from e
+                raise PackError(f"pack {dep}: the version {by_name[dep].version!r} is not semver") from e
             # предварительные версии (2.0.0rc1) тоже подходят под диапазон: иначе >=1.0 их бы не принял
             if not SpecifierSet(spec).contains(have, prereleases=True):
-                raise PackError(f"пакет {p.name} требует {dep} {spec}, загружен {by_name[dep].version}")
+                raise PackError(f"the pack {p.name} requires {dep} {spec}, {by_name[dep].version} is loaded")
     order: list[Pack] = []
     done: set[str] = set()
 
@@ -405,7 +405,7 @@ def _ordered(packs: list[Pack]) -> list[Pack]:
             return
         if name in chain:
             loop = chain[chain.index(name):] + (name,)
-            raise PackError(f"цикл в requires: {' → '.join(loop)}")
+            raise PackError(f"a cycle in requires: {' → '.join(loop)}")
         for dep in sorted(by_name[name].requires):
             visit(dep, chain + (name,))
         done.add(name)
@@ -426,8 +426,8 @@ def _check_broader(packs: list[Pack]) -> None:
     for p in packs:
         for c in p.concepts:
             if c.broader and c.broader not in codes.get(c.scheme, set()):
-                raise PackError(f"пакет {p.name}: {c.scheme}.{c.code}: broader {c.broader} — "
-                                f"нет в словаре {c.scheme} загружаемых пакетов")
+                raise PackError(f"pack {p.name}: {c.scheme}.{c.code}: broader {c.broader} — "
+                                f"not in the {c.scheme} vocabulary of the loaded packs")
 
 
 def installed_root(env=None) -> Path:
@@ -470,11 +470,11 @@ def load_packs(paths: list[Path] | None = None) -> list[Pack]:
     """Пакеты для загрузки в базу; все проверки согласованности — здесь, с местом ошибки."""
     packs = [load_pack(p) for p in (discover() if paths is None else paths)]
     if not any(p.name == "core" for p in packs):
-        raise PackError("ядро (пакет core) обязательно")
+        raise PackError("the core (the pack core) is required")
     seen_packs = set()
     for p in packs:
         if p.name in seen_packs:
-            raise PackError(f"пакет {p.name}: встречается дважды ({p.path})")
+            raise PackError(f"pack {p.name}: occurs twice ({p.path})")
         seen_packs.add(p.name)
     packs = _ordered(packs)
 
@@ -487,9 +487,9 @@ def load_packs(paths: list[Path] | None = None) -> list[Pack]:
         for c in p.concepts:
             key = (c.scheme, c.code)
             if key in core_codes:
-                raise PackError(f"пакет {p.name}: {c.scheme}.{c.code} — переопределение кода ядра")
+                raise PackError(f"pack {p.name}: {c.scheme}.{c.code} — redefines a code of the core")
             if key in owners:
-                raise PackError(f"пакет {p.name}: {c.scheme}.{c.code} — код уже задаёт пакет {owners[key]}")
+                raise PackError(f"pack {p.name}: {c.scheme}.{c.code} — the code is already defined by the pack {owners[key]}")
             owners[key] = p.name
     _check_broader(packs)
     _check_templates(packs)
