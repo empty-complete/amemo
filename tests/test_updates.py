@@ -1027,14 +1027,14 @@ def test_cli_update_auto_person_only(run, cli_updates, env):
     assert json.loads(out)["auto"] is False
     assert json.loads((Path(env["AMEMO_STATE"]) / "updates.json").read_text(encoding="utf-8"))["auto"] is False
     code, _, err = run("update", "auto", "on", extra={"AMEMO_AS_MODEL": "bot"})
-    assert code == 2 and "только человек" in err
+    assert code == 2 and "only a person" in err
     code, _, err = run("update", "auto", "on", extra={"AMEMO_AUTO_UPDATE": "false"})
     assert code == 6 and "auto_update" in err
 
 
 def test_cli_update_install(run, cli_updates, env):
     code, _, err = run("update", "install", extra={"CLAUDECODE": "1"})
-    assert code == 2 and "только человек" in err
+    assert code == 2 and "only a person" in err
     assert cli_updates[1].calls == []
     code, out, err = run("update", "install")
     assert code == 0, err

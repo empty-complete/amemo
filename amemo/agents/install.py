@@ -191,10 +191,10 @@ def _read(path: Path) -> str | None:
     except FileNotFoundError:
         return None
     except UnicodeDecodeError:
-        raise InstallError(f"{path}: файл не в UTF-8 — установщик его не правит") from None
+        raise InstallError(f"{path}: the file is not UTF-8 — the installer does not edit it") from None
     if text.startswith("\ufeff"):
-        raise InstallError(f"{path}: файл начинается с BOM — уберите BOM (сохраните как UTF-8 без BOM), установщик "
-                           f"такой файл не правит")
+        raise InstallError(f"{path}: the file starts with a BOM — remove the BOM (save as UTF-8 without BOM), the installer "
+                           f"does not edit such a file")
     return text
 
 
@@ -204,10 +204,10 @@ def _load_json(path: Path, text: str | None) -> dict:
     try:
         data = json.loads(text)
     except json.JSONDecodeError as e:
-        raise InstallError(f"{path}: не JSON (строка {e.lineno}, {e.msg}) — поправьте файл, установщик его "
-                           f"не трогает") from None
+        raise InstallError(f"{path}: not JSON (line {e.lineno}, {e.msg}) — fix the file, the installer does "
+                           f"not touch it") from None
     if not isinstance(data, dict):
-        raise InstallError(f"{path}: нужен объект JSON на верхнем уровне")
+        raise InstallError(f"{path}: a JSON object at the top level is required")
     return data
 
 
@@ -283,7 +283,7 @@ def put_mcp(data: dict, entry: dict) -> dict:
     if servers is None:
         servers = data["mcpServers"] = {}
     if not isinstance(servers, dict):
-        raise InstallError("mcpServers — не объект JSON")
+        raise InstallError("mcpServers is not a JSON object")
     servers[SERVER] = entry
     return data
 
@@ -304,12 +304,12 @@ def put_hooks(data: dict, handlers: Mapping[str, dict]) -> dict:
     data = json.loads(json.dumps(data))
     hooks = data.get("hooks")
     if hooks is not None and not isinstance(hooks, dict):
-        raise InstallError("hooks — не объект JSON")
+        raise InstallError("hooks is not a JSON object")
     hooks = dict(hooks or {})
     for event in ALL_EVENTS:
         groups = hooks.get(event)
         if groups is not None and not isinstance(groups, list):
-            raise InstallError(f"hooks.{event} — не список")
+            raise InstallError(f"hooks.{event} is not a list")
         wanted = None
         if event in handlers:
             wanted = {"hooks": [dict(handlers[event])]}
@@ -388,12 +388,12 @@ def put_block(text: str | None, begin: str, end: str, body: str, begin_tail: str
     Концы строк блока — как у файла."""
     text = text or ""
     if orphan_begin(text, begin, end):
-        raise InstallError(f"метка {begin} есть, а {end} стёрта — верните метку конца или уберите блок amemo")
+        raise InstallError(f"the mark {begin} is there but {end} is erased — return the end mark or remove the amemo block")
     nl = _eol(text)
     body = body.replace("\n", nl)
     found = list(_block_re(begin, end).finditer(text))
     if len(found) > 1:
-        raise InstallError(f"блок {begin} … {end} встречается {len(found)} раза — оставьте один")
+        raise InstallError(f"the block {begin} … {end} occurs {len(found)} times — keep one")
     if found:
         m = found[0]
         rest = m.group("rest")
@@ -445,22 +445,22 @@ def _parse_toml(path: Path, text: str | None) -> dict:
     try:
         return tomllib.loads(text or "")
     except tomllib.TOMLDecodeError as e:
-        raise InstallError(f"{path}: не TOML ({e}) — поправьте файл, установщик его не трогает") from None
+        raise InstallError(f"{path}: not TOML ({e}) — fix the file, the installer does not touch it") from None
 
 
 def put_toml(path: Path, text: str | None, entry: dict) -> str:
     current = _parse_toml(path, text)
     has_block = bool(_block_re(_TOML_BEGIN, _TOML_END).search(text or ""))
     if not has_block and SERVER in (current.get("mcp_servers") or {}):
-        raise InstallError(f"{path}: сервер mcp_servers.{SERVER} уже описан вне блока {_TOML_BEGIN} … "
-                           f"{_TOML_END} — уберите его или поставьте amemo сами")
+        raise InstallError(f"{path}: the server mcp_servers.{SERVER} is already described outside the block {_TOML_BEGIN} … "
+                           f"{_TOML_END} — remove it or set amemo up yourself")
     new = put_block(text, _TOML_BEGIN, _TOML_END, toml_body(entry),
                     " — amemo install; amemo uninstall убирает блок")
     parsed = _parse_toml(path, new)
     got = (parsed.get("mcp_servers") or {}).get(SERVER)
     if got != toml_entry(entry):
-        raise InstallError(f"{path}: блок amemo в конце файла читается не так, как записан (таблица "
-                           f"mcp_servers задана встроенной?) — поставьте сервер amemo вручную")
+        raise InstallError(f"{path}: the amemo block at the end of the file reads differently from what was written (is the table "
+                           f"mcp_servers given inline?) — set the amemo server up by hand")
     return new
 
 
@@ -533,7 +533,7 @@ def plan(agent: str, env: Mapping[str, str], project: Path | None = None, *, rem
     if project is not None:
         project = Path(project).expanduser().absolute()
         if not project.is_dir():
-            raise InstallError(f"--project {project}: папки нет")
+            raise InstallError(f"--project {project}: no such folder")
     lay: Layout = platforms.layout(agent, env, project)
     report = Report(agent, lay.format, project, dry_run, notes=list(lay.notes) if not remove else [],
                     remove=remove)
@@ -652,9 +652,9 @@ def apply(report: Report, env: Mapping[str, str]) -> Report:
                 try:
                     _run(report.restore, env)
                 except AgentCommandError as again:
-                    raise AgentCommandError(f"{e}; вернуть прежнюю запись не удалось ({again}) — она в "
+                    raise AgentCommandError(f"{e}; the previous entry could not be restored ({again}) — it is in "
                                             f"{user_json}{BACKUP}") from None
-                raise AgentCommandError(f"{e}; прежняя запись сервера amemo возвращена") from None
+                raise AgentCommandError(f"{e}; the previous entry of the amemo server is restored") from None
             raise
         removed = removed or command[1:3] == ["mcp", "remove"]
     for change in report.changes:
@@ -674,7 +674,7 @@ def _run(command: list[str], env: Mapping[str, str]) -> None:
         raise AgentCommandError(f"{show(command)}: {e}") from None
     if done.returncode != 0:
         tail = (done.stderr or done.stdout or "").strip().splitlines()[-1:] or [""]
-        raise AgentCommandError(f"{show(command)}: код {done.returncode} {tail[0]}".rstrip())
+        raise AgentCommandError(f"{show(command)}: exit code {done.returncode} {tail[0]}".rstrip())
 
 
 def _empty_folders(report: Report, env: Mapping[str, str]) -> list[Path]:

@@ -115,16 +115,16 @@ def test_restore_refuses_unsafe_targets_before_writing(pgdb, tmp_path, docs, mon
 
     monkeypatch.setattr(backup, "_run", spy)
     monkeypatch.setattr(backup, "_restore_via_sql", spy_sql)
-    with pytest.raises(BackupError, match="для снимка нужен objects_root"):
+    with pytest.raises(BackupError, match="a snapshot needs objects_root"):
         backup.restore(snap["path"], empty)
 
-    with pytest.raises(BackupError, match="целевая база не пустая"):
+    with pytest.raises(BackupError, match="the target database is not empty"):
         backup.restore(made["manifest"], busy)
     (tmp_path / "taken").mkdir()
     (tmp_path / "taken" / "file").write_text("x", encoding="utf-8")
-    with pytest.raises(BackupError, match="папка объектов не пустая"):
+    with pytest.raises(BackupError, match="the objects folder is not empty"):
         backup.restore(snap["path"], empty, objects_root=tmp_path / "taken")
-    with pytest.raises(BackupError, match="в дампе без снимка нет хранилища"):
+    with pytest.raises(BackupError, match="a dump without a snapshot has no object store"):
         backup.restore(made["manifest"], empty, objects_root=tmp_path / "new")
 
     broken = tmp_path / "broken"
@@ -133,18 +133,18 @@ def test_restore_refuses_unsafe_targets_before_writing(pgdb, tmp_path, docs, mon
     raw = bytearray(dump.read_bytes())
     raw[len(raw) // 2] ^= 0xFF
     dump.write_bytes(bytes(raw))
-    with pytest.raises(BackupError, match="не совпадает с манифестом"):
+    with pytest.raises(BackupError, match="does not match the manifest"):
         backup.restore(broken / "2026-11-05T08-00-00Z.json", empty)
 
     foreign = tmp_path / "foreign.json"
     foreign.write_text(json.dumps({**json.loads(open(made["manifest"]).read()), "kind": "other"}), encoding="utf-8")
-    with pytest.raises(BackupError, match="неизвестный формат"):
+    with pytest.raises(BackupError, match="unknown manifest format"):
         backup.restore(foreign, empty)
     partial = tmp_path / "bk" / "partial.json"
     data = json.loads(open(made["manifest"]).read())
     del data["base_id"]
     partial.write_text(json.dumps(data), encoding="utf-8")
-    with pytest.raises(BackupError, match="нет base_id"):
+    with pytest.raises(BackupError, match="has no base_id"):
         backup.restore(partial, empty)
 
     tampered = tmp_path / "tampered"
@@ -152,25 +152,25 @@ def test_restore_refuses_unsafe_targets_before_writing(pgdb, tmp_path, docs, mon
     manifest = json.loads((tampered / "manifest.json").read_text(encoding="utf-8"))
     some = next(item for item in manifest["objects"]["files"] if "/content/" in item["path"])
     (tampered / "objects" / some["path"]).write_bytes(b"other")
-    with pytest.raises(BackupError, match="не совпадает с манифестом"):
+    with pytest.raises(BackupError, match="does not match the manifest"):
         backup.restore(tampered, empty, objects_root=tmp_path / "new")
     escaping = tmp_path / "escaping"
     shutil.copytree(snap["path"], escaping)
     manifest["objects"]["files"].append({"path": "../../etc/passwd", "size": 1, "sha256": "0" * 64})
     (escaping / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-    with pytest.raises(BackupError, match="выходит за корень"):
+    with pytest.raises(BackupError, match="leaves the root"):
         backup.restore(escaping, empty, objects_root=tmp_path / "new")
     sneaky = tmp_path / "sneaky"                                   # «..» нельзя, даже если путь остаётся внутри
     shutil.copytree(snap["path"], sneaky)
     inner = json.loads((sneaky / "manifest.json").read_text(encoding="utf-8"))
     inner["objects"]["files"][0]["path"] = "extensions/../" + inner["objects"]["files"][0]["path"]
     (sneaky / "manifest.json").write_text(json.dumps(inner), encoding="utf-8")
-    with pytest.raises(BackupError, match="выходит за корень"):
+    with pytest.raises(BackupError, match="leaves the root"):
         backup.restore(sneaky, empty, objects_root=tmp_path / "new")
     extra = tmp_path / "extra"
     shutil.copytree(snap["path"], extra)
     (extra / "objects" / "лишний.txt").write_text("x", encoding="utf-8")
-    with pytest.raises(BackupError, match="лишние или недостающие"):
+    with pytest.raises(BackupError, match="extra or missing"):
         backup.restore(extra, empty, objects_root=tmp_path / "new")
 
     assert called == []                                           # до pg_restore ни один отказ не дошёл
@@ -205,7 +205,7 @@ def test_verify_restores_into_a_temporary_database_and_searches(pgdb, tmp_path, 
     shutil.copytree(tmp_path / "bk", broken)
     dump = broken / "2026-11-05T08-00-00Z.dump"
     dump.write_bytes(dump.read_bytes()[:-100])
-    with pytest.raises(BackupError, match="verify: восстановление: .*не совпадает с манифестом") as error:
+    with pytest.raises(BackupError, match="verify: restore: .*does not match the manifest") as error:
         backup.verify(broken / "2026-11-05T08-00-00Z.json", src)
     assert "password" not in str(error.value)
     with psycopg.connect(src) as conn:
@@ -243,7 +243,7 @@ def test_restored_facts_must_match_the_manifest(pgdb, tmp_path, docs, key):
         data["base_id"] = str(ids.uuid7())
     edited = tmp_path / "bk" / "edited.json"
     edited.write_text(json.dumps(data), encoding="utf-8")
-    with pytest.raises(BackupError, match=f"{key} не совпадает с манифестом"):
+    with pytest.raises(BackupError, match=f"{key} does not match the manifest"):
         backup.restore(edited, dst)
 
 
@@ -301,7 +301,7 @@ def test_interrupted_restore_leaves_the_target_empty(pgdb, tmp_path, docs, monke
               'list="$0.list"; "$REAL" -l "$last" | grep -v " TABLE public atom " > "$list"\n'
               'exec "$REAL" -L "$list" "$@"')
     monkeypatch.setenv("AMEMO_PG_BIN", str(tools(tmp_path, pg_restore=broken)))
-    with pytest.raises(BackupError, match="pg_restore завершился с кодом 1"):
+    with pytest.raises(BackupError, match="pg_restore exited with code 1"):
         backup.restore(made["manifest"], dst)
     with psycopg.connect(dst) as conn:
         assert conn.execute("SELECT count(*) FROM pg_tables WHERE schemaname = 'public'").fetchone()[0] == 0
@@ -353,7 +353,7 @@ def test_psql_error_is_reported_first(pgdb, tmp_path, docs, monkeypatch):
     if server_version(dst) >= 170000:
         assert backup.restore(made["manifest"], dst)["counts"] == made["counts"]   # прямой путь SQL не читает
         return
-    with pytest.raises(BackupError, match=r"^pg_restore: psql завершился с кодом 3: .*division by zero"):
+    with pytest.raises(BackupError, match=r"^pg_restore: psql exited with code 3: .*division by zero"):
         backup.restore(made["manifest"], dst)
     with psycopg.connect(dst) as conn:
         assert conn.execute("SELECT count(*) FROM pg_tables WHERE schemaname = 'public'").fetchone()[0] == 0
@@ -370,7 +370,7 @@ def test_restore_checks_file_versions_before_writing(pgdb, tmp_path, docs):
     (root / "objects" / content["path"]).unlink()
     manifest["objects"]["files"].remove(content)
     (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-    with pytest.raises(BackupError, match="восстановление: (нет )?верси[яи] 1"):
+    with pytest.raises(BackupError, match="restore: (no )?version 1"):
         backup.restore(root, dst, objects_root=tmp_path / "restored")
     with psycopg.connect(dst) as conn:
         assert conn.execute("SELECT count(*) FROM pg_tables WHERE schemaname = 'public'").fetchone()[0] == 0
@@ -402,7 +402,7 @@ def test_restore_compares_database_file_versions_with_the_snapshot(pgdb, tmp_pat
     manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
     manifest["objects"]["file_versions"] = []
     (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-    with pytest.raises(BackupError, match="версии файлов в базе не совпадают со снимком"):
+    with pytest.raises(BackupError, match="file versions in the base do not match the snapshot"):
         backup.restore(root, dst, objects_root=tmp_path / "restored")
     assert not (tmp_path / "restored").exists()
 

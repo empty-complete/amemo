@@ -161,7 +161,7 @@ def test_init_with_ocr_installs_languages(run, pg, tmp_path, monkeypatch):
     s = settings.load({"HOME": str(tmp_path / "home"), "USER": "ann"})
     assert (s.ocr, s.ocr_languages) == ("tesseract", ("rus", "eng"))
     code, _, err = run("init", "--ocr", "deu", extra={"CLAUDECODE": "1"})
-    assert code == 2 and "только человек" in err and len(calls) == 2
+    assert code == 2 and "only a person" in err and len(calls) == 2
 
 
 class _Tty(io.StringIO):
@@ -192,7 +192,7 @@ def test_init_refuses_empty_store_of_a_base_with_files(run, kb, store, docs, tmp
     shutil.rmtree(tmp_path / "objects")
     (tmp_path / "objects").mkdir()                               # пустой том на месте хранилища
     code, _, err = run("init")
-    assert code == 1 and "не подключено" in err
+    assert code == 1 and "not connected" in err
     assert not (tmp_path / "objects" / api.STORE_MARK).exists()
 
 
@@ -614,7 +614,7 @@ def test_backup_create_list_verify_restore(run, pgdb, tmp_path, monkeypatch):
     assert code == 0, err
     assert js(out)["base_id"] == made["base_id"]
     code, _, err = run("backup", "restore", made["manifest"], extra={"AMEMO_DSN": target})
-    assert code == 1 and "не пустая" in err
+    assert code == 1 and "not empty" in err
 
 
 def test_model_backup_adds_a_copy_but_never_rotates_or_restores(run, pgdb, tmp_path):
@@ -629,14 +629,14 @@ def test_model_backup_adds_a_copy_but_never_rotates_or_restores(run, pgdb, tmp_p
     old = [b["name"] for b in backup.backups(folder)]
     model = {"AMEMO_DSN": source, "CLAUDECODE": "1"}
     code, _, err = run("backup", "create", "--keep", "1", extra=model)
-    assert code == 2 and "только человек" in err and "hint: this action is for a person" in err
+    assert code == 2 and "only a person" in err and "hint: this action is for a person" in err
     assert [b["name"] for b in backup.backups(folder)] == old
     code, out, err = run("backup", "create", "--json", extra=model)
     assert code == 0, err
     names = [b["name"] for b in backup.backups(folder)]
     assert names[:2] == old and len(names) == 3
     code, _, err = run("backup", "restore", js(out)["manifest"], extra={"AMEMO_DSN": target, "CLAUDECODE": "1"})
-    assert code == 2 and "только человек" in err
+    assert code == 2 and "only a person" in err
     with db.connect(target) as conn:
         assert conn.execute("SELECT count(*) FROM pg_tables WHERE schemaname = 'public'").fetchone()[0] == 0
 
@@ -680,7 +680,7 @@ def test_token_rules(run, tmp_path):
     code, _, err = run("token", "create", "person:anna")
     assert code == 2 and "AMEMO_TOKENS" in err
     code, _, err = run("token", "create", "person:anna", extra={"AMEMO_TOKENS": str(path), "CLAUDECODE": "1"})
-    assert code == 2 and "только человек" in err and not path.exists()
+    assert code == 2 and "only a person" in err and not path.exists()
     assert run("token", "create", "anna", "--file", str(path))[0] == 2
     assert run("token", "create", "person:anna", "--file", str(path))[0] == 0
     path.chmod(0o666)                                            # файл, в который пишут другие, — отказ
@@ -797,7 +797,7 @@ def test_token_file_symlink_is_edited_in_its_target(run, tmp_path):
     dangling = tmp_path / "dangling.toml"
     dangling.symlink_to(tmp_path / "нет" / "tokens.toml")
     code, _, err = run("token", "create", "person:anna", "--file", str(dangling))
-    assert code == 2 and "несуществующий" in err and not (tmp_path / "нет").exists()
+    assert code == 2 and "a missing" in err and not (tmp_path / "нет").exists()
 
 
 def test_parallel_token_create_keeps_every_entry(env, tmp_path, capsys):

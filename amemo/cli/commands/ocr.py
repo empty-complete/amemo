@@ -69,11 +69,11 @@ def languages_of(values) -> list[str]:
         for lang in settings.ocr_language_list(value):
             lang = lang.lower()
             if not settings.OCR_LANGUAGE.fullmatch(lang):
-                raise CliError(f"язык {lang!r}: нужен код tessdata из строчных латинских букв и «_» (rus, eng, "
+                raise CliError(f"language {lang!r}: a tessdata code of lowercase Latin letters and «_» is required (rus, eng, "
                                f"chi_sim)", exit=USAGE, code="usage")
             found.append(lang)
     if not found:
-        raise CliError("языки не заданы: amemo ocr install rus eng", exit=USAGE, code="usage")
+        raise CliError("no languages given: amemo ocr install rus eng", exit=USAGE, code="usage")
     return list(dict.fromkeys(found))
 
 
@@ -111,15 +111,15 @@ def fetch(url: str, out) -> None:
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT) as response:   # noqa: S310 — адрес https:// выше
             if response.status != 200:
-                raise DownloadError(f"{url}: ответ {response.status}", response.status)
+                raise DownloadError(f"{url}: response {response.status}", response.status)
             total = 0
             while chunk := response.read(1 << 20):
                 total += len(chunk)
                 if total > LIMIT:
-                    raise DownloadError(f"{url}: больше {LIMIT >> 20} МиБ — это не языковой файл")
+                    raise DownloadError(f"{url}: over {LIMIT >> 20} MiB — this is not a language file")
                 out.write(chunk)
     except urllib.error.HTTPError as e:
-        raise DownloadError(f"{url}: ответ {e.code}", e.code) from None
+        raise DownloadError(f"{url}: response {e.code}", e.code) from None
     except (OSError, ValueError) as e:
         raise DownloadError(f"{url}: {getattr(e, 'reason', e)}") from None
 
@@ -135,18 +135,18 @@ def download(lang: str, quality: str, folder: Path) -> int:
                 fetch(url, f)
             except DownloadError as e:
                 if e.status == 404:
-                    raise CliError(f"языка {lang!r} нет в tessdata_{quality}", exit=NOT_FOUND, code="not_found",
-                                   hint="коды языков: https://github.com/tesseract-ocr/tessdata_fast") from None
-                raise CliError(f"язык {lang}: скачать не удалось — {e}", exit=ENV, code="ocr_download",
-                               hint="проверьте сеть и повторите: amemo ocr install " + lang) from None
+                    raise CliError(f"no language {lang!r} in tessdata_{quality}", exit=NOT_FOUND, code="not_found",
+                                   hint="language codes: https://github.com/tesseract-ocr/tessdata_fast") from None
+                raise CliError(f"language {lang}: the download failed — {e}", exit=ENV, code="ocr_download",
+                               hint="check the network and try again: amemo ocr install " + lang) from None
             f.flush()
             os.fsync(f.fileno())
         size = tmp.stat().st_size
         with open(tmp, "rb") as f:
             head = f.read(4 + 8 * MAX_ENTRIES)
         if not size or not looks_like_traineddata(head, size):
-            raise CliError(f"язык {lang}: с {url} пришло не то ({size} байт, не языковые данные tesseract)",
-                           exit=ENV, code="ocr_download", hint="повторите позже: amemo ocr install " + lang)
+            raise CliError(f"language {lang}: {url} returned something else ({size} bytes, not tesseract language data)",
+                           exit=ENV, code="ocr_download", hint="try again later: amemo ocr install " + lang)
         os.chmod(tmp, 0o644)
         os.replace(tmp, folder / f"{lang}{SUFFIX}")
         return size
@@ -179,7 +179,7 @@ def set_config(path: Path, values: dict) -> None:
     try:
         before = tomllib.loads(text)
     except tomllib.TOMLDecodeError as e:
-        raise CliError(f"{target}: не читается как TOML ({e}) — поправьте файл руками", exit=USAGE,
+        raise CliError(f"{target}: not readable as TOML ({e}) — fix the file by hand", exit=USAGE,
                        code="settings") from None
     lines, skip = [], False
     for line in text.splitlines():
@@ -202,8 +202,8 @@ def set_config(path: Path, values: dict) -> None:
     expected = {k: v for k, v in before.items() if k not in values}
     expected.update({k: v for k, v in values.items() if v is not None})
     if after != expected:                         # правка строк задела чужое — не пишем
-        raise CliError(f"{target}: не удалось поправить ocr и ocr_languages, не задев остального — впишите "
-                       f"их руками: {', '.join(f'{k} = {json.dumps(v, ensure_ascii=False)}' for k, v in values.items() if v is not None)}",
+        raise CliError(f"{target}: ocr and ocr_languages could not be edited without touching the rest — write "
+                       f"them by hand: {', '.join(f'{k} = {json.dumps(v, ensure_ascii=False)}' for k, v in values.items() if v is not None)}",
                        exit=USAGE, code="settings")
     target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     mode = (target.stat().st_mode & 0o777) if target.exists() else 0o600   # в amemo.toml бывает пароль DSN
@@ -240,14 +240,14 @@ def _person(ctx, what: str) -> None:
     if not ctx.is_person:
         from ... import api
 
-        raise api.Forbidden(f"языки OCR {what} только человек (person:), а не {ctx.agent}: это меняет установку")
+        raise api.Forbidden(f"only a person (person:) {what} OCR languages, not {ctx.agent}: this changes the installation")
 
 
 # --- команды ---
 
 def install(ctx, langs: list[str], *, quality: str = "fast", force: bool = False, args=None) -> dict:
     """Поставить языки (общая часть amemo ocr install и amemo init --ocr): что скачано и что уже было."""
-    _person(ctx, "ставит")
+    _person(ctx, "installs")
     folder = Path(ctx.settings.ocr_data)
     done, kept = [], []
     for lang in langs:
@@ -304,12 +304,12 @@ def run_list(ctx, args) -> int:
 
 def run_remove(ctx, args) -> int:
     langs = languages_of(args.languages)
-    _person(ctx, "удаляет")
+    _person(ctx, "removes")
     folder = Path(ctx.settings.ocr_data)
     missing = [lang for lang in langs if not (folder / f"{lang}{SUFFIX}").is_file()]
     if missing:
-        raise CliError(f"в {folder} нет языков: {', '.join(missing)}", exit=NOT_FOUND, code="not_found",
-                       hint="установленные языки: amemo ocr list")
+        raise CliError(f"{folder} has no languages: {', '.join(missing)}", exit=NOT_FOUND, code="not_found",
+                       hint="installed languages: amemo ocr list")
     for lang in langs:
         (folder / f"{lang}{SUFFIX}").unlink()
     saved = _configure(ctx, folder, args)

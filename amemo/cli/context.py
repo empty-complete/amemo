@@ -36,7 +36,7 @@ def detected_agent(env: Mapping[str, str]) -> tuple[str, str] | None:
     if as_model:
         agent = f"model:{as_model}"
         if not settings_.MODEL.fullmatch(agent):
-            raise CliError(f"AMEMO_AS_MODEL {as_model!r}: нужно имя из строчных латинских букв, цифр и «_.-»",
+            raise CliError(f"AMEMO_AS_MODEL {as_model!r}: a name of lowercase Latin letters, digits and «_.-» is required",
                            exit=USAGE, code="bad_agent")
         return agent, "AMEMO_AS_MODEL"
     if env.get("CLAUDECODE", "").strip() == "1":
@@ -52,7 +52,7 @@ def _default(value):
         return value.isoformat()
     if isinstance(value, (uuid.UUID, Path)):
         return str(value)
-    raise TypeError(f"{type(value).__name__} не переводится в JSON")
+    raise TypeError(f"{type(value).__name__} does not convert to JSON")
 
 
 def dumps(data) -> str:
@@ -87,11 +87,11 @@ class Context:
             if explicit is not None:
                 explicit = explicit.strip()
                 if not settings_.AGENT.fullmatch(explicit):
-                    raise CliError(f"--agent {explicit!r}: нужен person:<имя> или model:<имя> (строчные латинские "
-                                   f"буквы, цифры, «_.-»)", exit=USAGE, code="bad_agent")
+                    raise CliError(f"--agent {explicit!r}: person:<name> or model:<name> is required (lowercase Latin "
+                                   f"letters, digits, «_.-»)", exit=USAGE, code="bad_agent")
                 if detected is not None and explicit.startswith("person:"):
-                    raise CliError(f"--agent {explicit}: в окружении агента ({detected[1]}) запись от имени человека "
-                                   f"не принимается — команда идёт от {detected[0]}", exit=USAGE, code="bad_agent",
+                    raise CliError(f"--agent {explicit}: in the environment of an agent ({detected[1]}) writing as a person "
+                                   f"is not accepted — the command comes from {detected[0]}", exit=USAGE, code="bad_agent",
                                    hint="a person writes from their own terminal, without an agent")
                 self._agent = explicit
             elif detected is not None:
@@ -108,7 +108,7 @@ class Context:
 
     def dsn(self) -> str:
         if not self.settings.dsn:
-            raise CliError("база не задана", exit=ENV, code="no_dsn")
+            raise CliError("the database is not set", exit=ENV, code="no_dsn")
         return self.settings.dsn
 
     def connect(self, *, ready: bool = True):
@@ -120,9 +120,9 @@ class Context:
         if ready:
             pending = pending_migrations(conn)
             if pending is None:
-                raise CliError("база не подготовлена: в ней нет схемы amemo", exit=ENV, code="not_ready")
+                raise CliError("the database is not prepared: it has no amemo schema", exit=ENV, code="not_ready")
             if pending:
-                raise CliError(f"база не подготовлена: не применены миграции {', '.join(pending)}", exit=ENV,
+                raise CliError(f"the database is not prepared: migrations are not applied: {', '.join(pending)}", exit=ENV,
                                code="not_ready")
             db.seed_ids(conn)
         return conn

@@ -63,7 +63,7 @@ def run_export(ctx, args) -> int:
         report_out = out.with_name(f"{out.stem}.report.html")
     for path in (out, report_out) if args.anthology else (out,):
         if path.exists() or path.is_symlink():
-            raise CliError(f"{path}: файл уже есть — подборка не перезаписывает файлы", exit=USAGE, code="file")
+            raise CliError(f"{path}: the file already exists — a bundle does not overwrite files", exit=USAGE, code="file")
     state = ctx.settings.state
     made = api.bundle_export(ctx.connect(), ctx.store(), state, agent=ctx.agent, owner=ctx.agent,
                              selection=_selection(args), with_files=args.with_files, with_packs=args.with_packs,
@@ -107,7 +107,7 @@ def run_import(ctx, args) -> int:
 
     source = Path(args.file)
     if not source.is_file():
-        raise CliError(f"{source}: файла подборки нет", exit=USAGE, code="file")
+        raise CliError(f"{source}: no such bundle file", exit=USAGE, code="file")
     state, owner = ctx.settings.state, ctx.agent
     conn = ctx.connect()
     upload_id, part = api.upload_begin(state)

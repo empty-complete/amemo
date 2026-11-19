@@ -32,8 +32,8 @@ def _person_only(ctx, what: str) -> None:
     if not ctx.is_person:
         from ... import api
 
-        raise api.Forbidden(f"{what} только человек (person:), а не {ctx.agent}: модели доступен amemo backup create "
-                            f"без ротации")
+        raise api.Forbidden(f"only a person (person:) {what}, not {ctx.agent}: a model can run amemo backup create "
+                            f"without rotation")
 
 
 def run_create(ctx, args) -> int:
@@ -41,7 +41,7 @@ def run_create(ctx, args) -> int:
 
     target = Path(ctx.settings.backups)
     if args.keep is not None:
-        _person_only(ctx, "ротацию копий (--keep) задаёт")
+        _person_only(ctx, "sets the rotation of copies (--keep)")
     if args.snapshot:
         made = backup.snapshot(ctx.dsn(), ctx.settings.data, target)
     elif ctx.is_person:
@@ -64,7 +64,7 @@ def run_list(ctx, args) -> int:
 def run_restore(ctx, args) -> int:
     from ... import backup
 
-    _person_only(ctx, "базу из копии восстанавливает")
+    _person_only(ctx, "restores a base from a copy")
     source = Path(args.source)
     objects = Path(args.objects) if args.objects else (ctx.settings.data if source.is_dir() else None)
     done = backup.restore(source, ctx.dsn(), objects_root=objects)

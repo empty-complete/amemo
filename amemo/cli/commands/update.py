@@ -35,7 +35,7 @@ def _person_only(ctx, what: str) -> None:
     if not ctx.is_person:
         from ... import api
 
-        raise api.Forbidden(f"{what} только человек (person:), а не {ctx.agent}: обновление — из своего терминала")
+        raise api.Forbidden(f"only a person (person:) {what}, not {ctx.agent}: an update is run from your own terminal")
 
 
 def text(status: dict) -> str:
@@ -71,7 +71,7 @@ def run_check(ctx, args) -> int:
 def run_install(ctx, args) -> int:
     from ... import updates
 
-    _person_only(ctx, "обновление ставит")
+    _person_only(ctx, "installs an update")
     updater = _updater(ctx)
     status = updater.check(manual=True)
     try:
@@ -94,7 +94,7 @@ def run_install(ctx, args) -> int:
 def run_auto(ctx, args) -> int:
     from ... import updates
 
-    _person_only(ctx, "автообновление включает и выключает")
+    _person_only(ctx, "switches automatic updates on and off")
     try:
         status = _updater(ctx).set_auto(args.mode == "on")
     except updates.UpdateError as e:

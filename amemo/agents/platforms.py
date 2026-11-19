@@ -115,4 +115,4 @@ def layout(agent: str, env: Mapping[str, str], project: Path | None = None, *,
                       hooks_json=base / "hooks.json", hook_events=events, agents_md=base / "AGENTS.md",
                       skills=home / ".agents" / "skills", hook_form=form,
                       notes=notes + ("Codex может попросить одобрить новые хуки",))
-    raise ValueError(f"агент {agent!r} не поддерживается: допустимы {', '.join(AGENTS)}")
+    raise ValueError(f"the agent {agent!r} is not supported: allowed are {', '.join(AGENTS)}")
