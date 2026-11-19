@@ -108,9 +108,10 @@ jobs:
     steps:
       - name: pipx install 'amemo[web]' from PyPI
         run: |
-          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+          # индекс PyPI отдаёт новую версию не сразу: в выпусках 0.1.0a3, a9 и a11 пяти минут не хватило
+          for attempt in $(seq 1 40); do
             pipx install "amemo[web]==$VERSION" && break
-            [ "$attempt" = 10 ] && exit 1
+            [ "$attempt" = 40 ] && exit 1
             echo "PyPI ещё не отдаёт $VERSION: попытка $attempt"; sleep 30
           done
           amemo --version | grep -Fx "amemo $VERSION"
