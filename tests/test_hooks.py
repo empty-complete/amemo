@@ -374,15 +374,15 @@ def topic_base(kb):
 
 
 def test_prompt_on_the_topic_lists_records_that_share_its_words(kb, env):
-    """Марки в запросе нет, а все слова разом не находятся: в подсказке — записи, где есть не меньше половины
-    отличительных слов запроса; выше та, где их больше."""
+    """Марки в запросе нет, а все слова разом не находятся: в подсказке — запись, где есть три отличительных
+    слова запроса из четырёх; запись с двумя из четырёх не подходит."""
     refs = topic_base(kb)
     out = hooks.run("UserPromptSubmit", event("UserPromptSubmit", prompt="какой шаг кронштейнов у витража на фасаде"),
                     env)
     lines = context(out, "UserPromptSubmit").splitlines()
     assert lines[0] == hooks.FRAME
-    assert refs["@s1"] in lines[1] and refs["@s2"] in lines[2]
-    assert not any(refs["@s3"] in line for line in lines)
+    assert refs["@s1"] in lines[1]
+    assert not any(refs["@s2"] in line or refs["@s3"] in line for line in lines)      # два слова из четырёх — мало
     assert hooks_log(env) == ""
 
 
@@ -390,6 +390,14 @@ def test_prompt_off_the_topic_gives_no_hint_for_one_shared_word(kb, env):
     """Одно общее слово темы не подтверждает; слова, которых в базе нет, идут в счёт запроса."""
     topic_base(kb)
     prompt = "поправь кнопку в интерфейсе настроек, кронштейн тут ни при чём"
+    assert hooks.run("UserPromptSubmit", event("UserPromptSubmit", prompt=prompt), env) == ""
+    assert hooks_log(env) == ""
+
+
+def test_two_shared_words_do_not_make_a_topic(kb, env):
+    """«Кнопка» и «интерфейс» редки в базе и есть в записи, но сообщение о другом: двух общих слов мало."""
+    records.commit(kb, [atom("exp", label="Экспорт данных кнопкой в интерфейсе программы")], agent=AGENT)
+    prompt = "поправь кнопку в интерфейсе настроек"
     assert hooks.run("UserPromptSubmit", event("UserPromptSubmit", prompt=prompt), env) == ""
     assert hooks_log(env) == ""
 
@@ -407,7 +415,7 @@ def test_related_keeps_silent_on_a_long_prompt(kb, env, monkeypatch):
     conn = hooks._connect(env["AMEMO_DSN"])
     try:
         prompt = "шаг кронштейнов витража на фасаде"
-        assert hooks.related(conn, prompt) == [refs["@s1"], refs["@s2"]]
+        assert hooks.related(conn, prompt) == [refs["@s1"]]
         assert hooks.related(conn, "кронштейн") == []                      # одно слово — не тема
         assert hooks.related(conn, f"{prompt} " * 80) == []                # длиннее RELATED_TEXT_MAX
         monkeypatch.setattr(hooks, "RELATED_WORDS_MAX", 3)
