@@ -1,11 +1,15 @@
 ---
 name: amemo-answer
-description: Answer a question from the amemo knowledge base in three steps (search, read, answer) with sources, review status, an honest "not found" and a helpful mark. Use when a question may be covered by amemo memory. / Отвечать по памяти amemo со ссылками на источники.
+description: Answer a question or gather facts for a task from the amemo knowledge base in three steps (search, read, answer) with sources, review status, an honest "not found" and a helpful mark. Use first — before searching the web or files — whenever a question or a task (a report, a document, a calculation, a review) needs facts that amemo memory may hold: requirements of standards, numbers, earlier decisions, lessons. / Отвечать и собирать сведения по памяти amemo со ссылками на источники — первой, до поиска в сети и по файлам.
 ---
 
 # amemo-answer
 
 ## RU — ответ по памяти amemo
+
+**Сначала память.** Вопрос или задача, которой нужны факты, — требования нормативов, числа, прежние решения,
+уроки, — начинается с `amemo_search`, а не с поиска в сети или по файлам. Так же и когда просят собрать сведения
+в документ или отчёт: сперва то, что уже есть в памяти с источником, потом — чего в ней не хватило.
 
 **Три шага.**
 1. **Найти.** `amemo_search` по марке или нескольким ключевым словам (не всем вопросом). Читай короткие карточки
@@ -32,6 +36,10 @@ description: Answer a question from the amemo knowledge base in three steps (sea
 пользователю и предложи исправление через amemo-remember.
 
 ## EN — answering from amemo memory
+
+**Memory first.** A question or a task that needs facts — requirements of standards, numbers, earlier decisions,
+lessons — starts with `amemo_search`, not with a search of the web or of files. The same when asked to gather
+information into a document or a report: first what memory already holds with a source, then what it lacks.
 
 **Three steps.**
 1. **Find.** `amemo_search` by a code or a few keywords (not the whole question). Read the short result cards; do
