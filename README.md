@@ -656,8 +656,8 @@ http_headers = { "X-Amemo-Agent" = "model:codex" }
 
 - **Hooks.** `amemo hook SessionStart` adds 3–5 verified atoms about the project (by the git root name) and a
   reminder; `UserPromptSubmit` adds confident hits for the prompt («amemo first»): at most three, a bare
-  number is not taken for a code, and without a code a record is added only when it holds at least half of the
-  prompt's distinctive words (a match by words, not by meaning); `PreCompact` asks the summary to list findings
+  number is not taken for a code, and without a code a record is added only when it holds at least 60 % of the
+  prompt's distinctive words and at least three of them (a match by words, not by meaning); `PreCompact` asks the summary to list findings
   worth saving; `Stop` reminds once per session to record findings — only when the session did work and wrote
   nothing to amemo. At the start the
   agent also learns that semantic search is off, or that the database refuses the connection. A hook reads the
