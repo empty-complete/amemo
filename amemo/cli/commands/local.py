@@ -132,9 +132,9 @@ def _existing(ctx, path: Path, pg_data: Path):
     except settings_.SettingsError as e:
         raise CliError(f"{path}: {e}", exit=ENV, code="bad_config") from None
     if found.pg_data is None or Path(found.pg_data).resolve() != pg_data.resolve() or not found.dsn:
-        raise CliError(f"{path}: файл настроек уже есть и создан не этой установкой — setup его не переписывает",
+        raise CliError(f"{path}: the settings file already exists and was not made by this installation — setup does not rewrite it",
                        exit=USAGE, code="config_exists",
-                       hint="задайте другой файл в AMEMO_CONFIG или перенесите прежний, затем повторите amemo setup")
+                       hint="set another file in AMEMO_CONFIG or move the previous one, then repeat amemo setup")
     return found
 
 
@@ -144,7 +144,7 @@ def _agents(raw: str | None) -> list[str]:
     names = [x.strip() for x in raw.split(",") if x.strip()]
     wrong = [x for x in names if x not in AGENTS]
     if wrong:
-        raise CliError(f"--agents: неизвестные {', '.join(wrong)} — допустимы {', '.join(AGENTS)}", exit=USAGE,
+        raise CliError(f"--agents: unknown {', '.join(wrong)} — allowed are {', '.join(AGENTS)}", exit=USAGE,
                        code="bad_agents")
     return list(dict.fromkeys(names))
 
@@ -168,17 +168,17 @@ def run_setup(ctx, args) -> int:
     if (args.embed or args.ocr) and not ctx.is_person:             # отказ до любых изменений
         from ... import api
 
-        what = "смысловой поиск включает" if args.embed else "языки OCR ставит"
-        raise api.Forbidden(f"{what} только человек (person:), а не {ctx.agent}: setup с --embed или --ocr "
-                            f"запускает человек")
+        what = "turns on semantic search" if args.embed else "installs OCR languages"
+        raise api.Forbidden(f"only a person (person:) {what}, not {ctx.agent}: setup with --embed or --ocr "
+                            f"is run by a person")
     if args.plugin_out and "cowork" not in agents:
-        raise CliError("--plugin-out — только вместе с --agents cowork", exit=USAGE, code="bad_args")
+        raise CliError("--plugin-out goes only with --agents cowork", exit=USAGE, code="bad_args")
     if args.embed_models and not args.embed:
-        raise CliError("--embed-models — только вместе с --embed", exit=USAGE, code="bad_args")
+        raise CliError("--embed-models goes only with --embed", exit=USAGE, code="bad_args")
     overridden = [var for var in OVERRIDES if ctx.env.get(var, "").strip()]
     if overridden:
-        raise CliError(f"{', '.join(overridden)} в окружении перекрыли бы настройки, которые пишет setup", exit=USAGE,
-                       code="env_overrides", hint="уберите эти переменные из окружения и повторите amemo setup")
+        raise CliError(f"{', '.join(overridden)} in the environment would override the settings that setup writes", exit=USAGE,
+                       code="env_overrides", hint="remove these variables from the environment and repeat amemo setup")
     data = (args.data or home(ctx.env) / "amemo-data").expanduser().absolute()
     cluster = localpg.Cluster(args.pg_bin.expanduser().absolute(), data / "pg")
     try:
@@ -201,9 +201,9 @@ def run_setup(ctx, args) -> int:
                 cluster.init(password, port)
                 steps.append(f"кластер PostgreSQL {major}: {cluster.data}, порт {port}")
             else:
-                raise CliError(f"{cluster.data}: кластер уже есть, а настроек для него нет — пароль неизвестен",
+                raise CliError(f"{cluster.data}: the cluster already exists but has no settings — the password is unknown",
                                exit=ENV, code="cluster_orphan",
-                               hint="выберите другую папку данных (--data) или удалите прежний кластер сами")
+                               hint="choose another data folder (--data) or delete the previous cluster yourself")
             values = {"dsn": localpg.dsn(password, port), "data": data / "objects", "docs": args.docs,
                       "state": data / "state", "backups": data / "backups",
                       "lang": getattr(args, "lang", None),               # общая опция --lang: и запишется в настройки
@@ -218,8 +218,8 @@ def run_setup(ctx, args) -> int:
                 # новый комплект приложения: те же данные, программы PostgreSQL из другой папки
                 on_disk = (cluster.data / "PG_VERSION").read_text(encoding="utf-8").strip()
                 if on_disk != str(major):
-                    raise CliError(f"кластер {cluster.data} — PostgreSQL {on_disk}, а программы {cluster.bin} — "
-                                   f"{major}: данные другой мажорной версии без pg_upgrade не открыть", exit=ENV,
+                    raise CliError(f"the cluster {cluster.data} is PostgreSQL {on_disk}, but the programs in {cluster.bin} are "
+                                   f"{major}: data of another major version cannot be opened without pg_upgrade", exit=ENV,
                                    code="pg_major")
                 set_config_value(config, "pg_bin", wanted)
                 steps.append(f"программы PostgreSQL: {wanted}")
@@ -302,8 +302,8 @@ def run_pg(ctx, args) -> int:
     action = args.pg_command
     s = ctx.settings
     if s.pg_bin is None or s.pg_data is None:
-        raise CliError("своего PostgreSQL нет: в настройках нет pg_bin и pg_data", exit=ENV, code="no_local_pg",
-                       hint="его создаёт amemo setup; база чужая — запускайте её своими средствами")
+        raise CliError("no own PostgreSQL: the settings have no pg_bin and pg_data", exit=ENV, code="no_local_pg",
+                       hint="amemo setup creates it; a foreign database is started by your own means")
     cluster = localpg.Cluster(Path(s.pg_bin), Path(s.pg_data))
     try:
         if action == "start":

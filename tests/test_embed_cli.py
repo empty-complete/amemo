@@ -151,7 +151,7 @@ def test_enable_with_yes_downloads_embeds_every_document_and_activates(run, kb, 
 def test_enable_without_permission_downloads_and_registers_nothing(run, kb, fastembed):
     put_atom(kb, "Альфа", "alpha")
     code, _, err = run("embed", "enable")
-    assert code == 2 and "только с разрешения" in err and "amemo embed enable --yes" in err
+    assert code == 2 and "only with permission" in err and "amemo embed enable --yes" in err
     code, out, _ = run("embed", "enable", "--json")
     assert code == 2 and js(out)["code"] == "download_not_allowed"
     assert fastembed.downloads() == [] and models_in(kb) == []
@@ -168,7 +168,7 @@ def test_enable_asks_a_person_in_a_terminal(run, kb, fastembed, monkeypatch):
 
     monkeypatch.setattr(sys, "stdin", Stdin("\n", tty=True))
     code, _, err = run("embed", "enable")
-    assert code == 2 and "Скачать модель смыслового поиска" in err and "не включён" in err
+    assert code == 2 and "Скачать модель смыслового поиска" in err and "not turned on" in err
     assert fastembed.downloads() == [] and models_in(kb) == []
 
     monkeypatch.setattr(sys, "stdin", Stdin("да\n", tty=True))
@@ -218,7 +218,7 @@ def test_enable_counts_again_when_a_record_lands_before_activation(run, kb, fast
 @pytest.mark.parametrize("extra", [{"CLAUDECODE": "1"}, {"AMEMO_AS_MODEL": "bot"}])
 def test_enable_is_for_a_person_only(run, kb, fastembed, extra):
     code, _, err = run("embed", "enable", "--yes", extra=extra)
-    assert code == 2 and "только человек" in err
+    assert code == 2 and "only a person" in err
     assert fastembed.created == [] and models_in(kb) == []
     assert run("embed", "status", extra=extra)[0] == 0                         # смотреть можно
 

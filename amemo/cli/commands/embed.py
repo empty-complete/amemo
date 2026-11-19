@@ -76,11 +76,11 @@ def _allow(ctx, args, name: str, folder) -> None:
         return
     hint = "разрешите скачать: amemo embed enable --yes"
     if not _interactive(ctx):
-        raise CliError(f"модель {name} (~{MB} МБ) скачивается только с разрешения", exit=USAGE,
+        raise CliError(f"the model {name} (~{MB} MB) is downloaded only with permission", exit=USAGE,
                        code="download_not_allowed", hint=hint)
     print(QUESTION.format(name=name, mb=MB, folder=folder), end="", file=ctx.err, flush=True)
     if sys.stdin.readline().strip().lower() not in YES:
-        raise CliError("модель не скачана: смысловой поиск не включён", exit=USAGE, code="download_not_allowed",
+        raise CliError("the model is not downloaded: semantic search is not turned on", exit=USAGE, code="download_not_allowed",
                        hint=hint)
 
 
@@ -100,8 +100,8 @@ def _provider(ctx, args, folder):
     try:
         remote.embed([PROBE])
     except embed.EmbeddingError as e:
-        raise CliError(f"модель не скачалась: {e}", exit=ENV, code="embed_download",
-                       hint="проверьте сеть и место на диске и повторите: amemo embed enable --yes") from None
+        raise CliError(f"the model was not downloaded: {e}", exit=ENV, code="embed_download",
+                       hint="check the network and the disk space and try again: amemo embed enable --yes") from None
     return remote, True
 
 
@@ -109,8 +109,8 @@ def _person(ctx) -> None:
     if not ctx.is_person:
         from ... import api
 
-        raise api.Forbidden(f"смысловой поиск включает только человек (person:), а не {ctx.agent}: это скачивает "
-                            f"модель и меняет установку")
+        raise api.Forbidden(f"only a person (person:) turns on semantic search, not {ctx.agent}: this downloads "
+                            f"a model and changes the installation")
 
 
 def run_enable(ctx, args) -> int:
@@ -135,14 +135,14 @@ def enable(ctx, args) -> dict:
     _person(ctx)
     chosen = backend()
     if chosen == "none":
-        raise CliError("AMEMO_BACKEND=none выключает смысловой поиск", exit=USAGE, code="backend_disabled",
-                       hint="уберите AMEMO_BACKEND из окружения (или задайте fastembed) и повторите")
+        raise CliError("AMEMO_BACKEND=none switches semantic search off", exit=USAGE, code="backend_disabled",
+                       hint="remove AMEMO_BACKEND from the environment (or set fastembed) and try again")
     if chosen != "fastembed":
-        raise CliError(f"неизвестный AMEMO_BACKEND {chosen!r}: нужен fastembed или none", exit=USAGE,
-                       code="backend_unknown", hint="уберите AMEMO_BACKEND или задайте fastembed")
+        raise CliError(f"unknown AMEMO_BACKEND {chosen!r}: fastembed or none is required", exit=USAGE,
+                       code="backend_unknown", hint="remove AMEMO_BACKEND or set fastembed")
     if not installed():
-        raise CliError("пакет fastembed не установлен: смысловому поиску нужен extra amemo[embed]", exit=ENV,
-                       code="fastembed_missing", hint=f"установите: {INSTALL}, затем amemo embed enable")
+        raise CliError("the fastembed package is not installed: semantic search needs the extra amemo[embed]", exit=ENV,
+                       code="fastembed_missing", hint=f"install: {INSTALL}, then amemo embed enable")
     conn = ctx.connect()
     folder = embed.models_dir()
     provider, downloaded = _provider(ctx, args, folder)

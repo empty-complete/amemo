@@ -104,7 +104,7 @@ def test_password_is_only_in_the_process_environment(pgdb, tmp_path, docs, monke
             return subprocess.CompletedProcess(argv, 1, "", f"connection failed: password {secret} rejected")
 
         monkeypatch.setattr(backup.subprocess, "run", failing)
-        with pytest.raises(BackupError, match=r"pg_dump: pg_dump завершился с кодом 1") as error:
+        with pytest.raises(BackupError, match=r"pg_dump: pg_dump exited with code 1") as error:
             backup.create(with_user(src, role, secret), tmp_path / "bk", now=NOW + timedelta(seconds=1))
         assert secret not in str(error.value) and "***" in str(error.value)
         assert not list((tmp_path / "bk").glob("2026-11-05T08-00-01Z*"))          # сбой не оставил пары и .tmp
@@ -120,7 +120,7 @@ def test_existing_copy_is_not_overwritten_and_partial_pairs_are_not_copies(pgdb,
     folder = tmp_path / "bk"
     first = backup.create(src, folder, now=NOW)
     before = open(first["dump"], "rb").read()
-    with pytest.raises(BackupError, match="уже есть"):
+    with pytest.raises(BackupError, match="already exists"):
         backup.create(src, folder, now=NOW)
     assert open(first["dump"], "rb").read() == before
 
@@ -139,7 +139,7 @@ def test_existing_copy_is_not_overwritten_and_partial_pairs_are_not_copies(pgdb,
     (folder / "2026-11-05T08-00-04Z.json").write_text(json.dumps({**json.loads(open(first["manifest"]).read()),
                                                                  "file": "2026-11-05T08-00-04Z.dump"}))  # без дампа
     assert [item["name"] for item in backup.backups(folder)] == ["2026-11-05T08-00-00Z"]
-    with pytest.raises(BackupError, match="нет дампа"):
+    with pytest.raises(BackupError, match="no dump"):
         backup.check(folder / "2026-11-05T08-00-04Z.json")
 
 
@@ -198,7 +198,7 @@ def test_snapshot_links_dump_and_objects_by_base_id(pgdb, tmp_path, docs):
     with psycopg.connect(src) as conn:
         object_id, n, digest = conn.execute("SELECT object_id, n, digest FROM object_version").fetchone()
     assert "sha256:" + backup._sha256(ObjectStore(root / "objects").content(object_id, n)) == digest
-    with pytest.raises(BackupError, match="уже есть"):
+    with pytest.raises(BackupError, match="already exists"):
         backup.snapshot(src, tmp_path / "data" / "objects", tmp_path / "snap", now=NOW)
 
 
@@ -206,12 +206,12 @@ def test_snapshot_failure_leaves_no_ready_directory(pgdb, tmp_path, docs):
     src = pgdb()
     fill(src, tmp_path / "objects", docs)
     (tmp_path / "objects" / "outside").symlink_to(tmp_path)
-    with pytest.raises(BackupError, match="символическая ссылка"):
+    with pytest.raises(BackupError, match="symbolic link"):
         backup.snapshot(src, tmp_path / "objects", tmp_path / "snap", now=NOW)
     assert list((tmp_path / "snap").iterdir()) == []
     (tmp_path / "objects" / "outside").unlink()
     shutil.rmtree(tmp_path / "objects")
-    with pytest.raises(BackupError, match="корня хранилища нет"):
+    with pytest.raises(BackupError, match="no store root"):
         backup.snapshot(src, tmp_path / "objects", tmp_path / "snap", now=NOW)
     assert list((tmp_path / "snap").iterdir()) == []
 
@@ -223,7 +223,7 @@ def test_manifest_file_cannot_point_outside_its_folder(pgdb, tmp_path, docs, fil
     made = backup.create(src, tmp_path / "bk", now=NOW)
     manifest = tmp_path / "bk" / "evil.json"
     manifest.write_text(json.dumps({**json.loads(open(made["manifest"]).read()), "file": file}), encoding="utf-8")
-    with pytest.raises(BackupError, match="не имя файла|выходит|недопустимый"):
+    with pytest.raises(BackupError, match="not a file name|leaves the root|not allowed"):
         backup.check(manifest)
 
 
@@ -232,10 +232,10 @@ def test_tool_must_be_postgresql_18(tmp_path, monkeypatch):
     fake.write_text("#!/bin/sh\necho 'pg_dump (PostgreSQL) 16.4'\n", encoding="utf-8")
     fake.chmod(0o755)
     monkeypatch.setenv("AMEMO_PG_BIN", str(tmp_path))
-    with pytest.raises(BackupError, match="нужна версия 18"):
+    with pytest.raises(BackupError, match="version 18 or newer is required"):
         backup._tool("pg_dump")
     monkeypatch.setenv("AMEMO_PG_BIN", str(tmp_path / "нет"))
-    with pytest.raises(BackupError, match="нужен клиент PostgreSQL 18"):
+    with pytest.raises(BackupError, match="the PostgreSQL 18 client is required"):
         backup._tool("pg_dump")
 
 
@@ -323,7 +323,7 @@ def test_snapshot_refuses_a_folder_that_is_not_an_ocfl_root(pgdb, tmp_path, docs
     src = pgdb()
     fill(src, tmp_path / "data" / "objects", docs)
     (tmp_path / "data" / ".env").write_text("SECRET=1\n", encoding="utf-8")
-    with pytest.raises(BackupError, match="не корень OCFL"):
+    with pytest.raises(BackupError, match="not an OCFL root"):
         backup.snapshot(src, tmp_path / "data", tmp_path / "snap", now=NOW)
     assert not (tmp_path / "snap").exists()
 
@@ -333,12 +333,12 @@ def test_snapshot_refuses_special_files_and_missing_versions(pgdb, tmp_path, doc
     fill(src, tmp_path / "objects", docs)
     fifo = tmp_path / "objects" / "pipe"
     os.mkfifo(fifo)
-    with pytest.raises(BackupError, match="не файл и не папка"):
+    with pytest.raises(BackupError, match="neither a file nor a folder"):
         backup.snapshot(src, tmp_path / "objects", tmp_path / "snap", now=NOW)
     fifo.unlink()
     with psycopg.connect(src) as conn:
         object_id, n = conn.execute("SELECT object_id, n FROM object_version WHERE digest IS NOT NULL").fetchone()
     ObjectStore(tmp_path / "objects").content(object_id, n).unlink()          # копия версии пропала из хранилища
-    with pytest.raises(BackupError, match=f"снимок: (нет )?верси[яи] {n} объекта obj:{object_id}"):
+    with pytest.raises(BackupError, match=f"snapshot: (no )?version {n} of the object obj:{object_id}"):
         backup.snapshot(src, tmp_path / "objects", tmp_path / "snap", now=NOW)
     assert list((tmp_path / "snap").iterdir()) == []

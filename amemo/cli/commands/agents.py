@@ -59,13 +59,13 @@ def _run(ctx, args, *, remove: bool) -> int:
     from ...agents import cowork, install
 
     if args.target != "cowork" and args.out is not None:
-        raise CliError("--out — только для cowork", exit=USAGE, code="install")
+        raise CliError("--out is only for cowork", exit=USAGE, code="install")
     unless_synced = getattr(args, "unless_synced", False)
     if unless_synced and (args.target != "claude-code" or args.project is not None):
-        raise CliError("--unless-synced — только для claude-code и без --project: плагин из аккаунта — глобальный",
+        raise CliError("--unless-synced is only for claude-code and without --project: the plugin from the account is global",
                        exit=USAGE, code="install")
     if args.target == "cowork" and args.project is not None:
-        raise CliError("--project — не для cowork: плагин ставится в аккаунт, а не в проект", exit=USAGE,
+        raise CliError("--project is not for cowork: the plugin goes into the account, not into a project", exit=USAGE,
                        code="install")
     try:
         if args.target == "cowork":
@@ -80,7 +80,7 @@ def _run(ctx, args, *, remove: bool) -> int:
         raise CliError(str(e), exit=USAGE, code="install") from None
     except install.AgentCommandError as e:
         raise CliError(str(e), exit=ENV, code="install_command",
-                       hint="проверьте `claude mcp list`; без команды claude в PATH установщик правит файл сам")
+                       hint="check `claude mcp list`; without the claude command in PATH the installer edits the file itself")
     if not ctx.json:
         for line in report.notes:
             ctx.note(f"amemo: {line}")

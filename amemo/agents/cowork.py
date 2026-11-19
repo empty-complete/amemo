@@ -189,13 +189,13 @@ def build(env: Mapping[str, str], out: Path | None = None, *, dry_run: bool = Fa
     """Собрать zip плагина в out (по умолчанию ~/amemo-plugin.zip)."""
     path = Path(out).expanduser().absolute() if out is not None else default_path(env)
     if path.is_dir():
-        raise InstallError(f"--out {path}: это папка, нужен путь к файлу .zip")
+        raise InstallError(f"--out {path}: this is a folder, a path to a .zip file is required")
     command, note = amemo_command(env)
     temporary = ephemeral(command, env)
     if temporary:
-        raise InstallError(f"amemo запущен из временного окружения ({temporary}): в плагине остался бы путь, которого "
-                           f"скоро не будет. Поставьте amemo постоянно — uv tool install \"amemo[web]\" или pipx "
-                           f"install \"amemo[web]\" — и повторите amemo install cowork")
+        raise InstallError(f"amemo is run from a temporary environment ({temporary}): the plugin would keep a path that "
+                           f"will soon be gone. Install amemo permanently — uv tool install \"amemo[web]\" or pipx "
+                           f"install \"amemo[web]\" — and repeat amemo install cowork")
     files = plugin_files(command)
     data = zip_bytes(files)
     report = PluginReport(path, dry_run, files=sorted(files), command=command)
@@ -203,7 +203,7 @@ def build(env: Mapping[str, str], out: Path | None = None, *, dry_run: bool = Fa
         report.notes.append(note)
     if path.exists():
         if not is_ours(path):
-            raise InstallError(f"{path}: файл есть, и это не плагин amemo — укажите другой путь (--out)")
+            raise InstallError(f"{path}: the file exists and is not an amemo plugin — give another path (--out)")
         if path.read_bytes() != data:
             report.action = "изменён"
     else:

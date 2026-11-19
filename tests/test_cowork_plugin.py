@@ -85,7 +85,7 @@ def test_dry_run_writes_nothing(home, env):
 def test_foreign_file_is_not_overwritten_and_not_removed(home, env):
     target = home / "notes.zip"
     target.write_bytes(b"not a plugin")
-    with pytest.raises(install.InstallError, match="не плагин amemo"):
+    with pytest.raises(install.InstallError, match="not an amemo plugin"):
         cowork.build(env, target)
     report = cowork.remove(env, target)
     assert report.action is None and report.warnings and target.read_bytes() == b"not a plugin"
@@ -94,7 +94,7 @@ def test_foreign_file_is_not_overwritten_and_not_removed(home, env):
 def test_custom_out_path_and_folder_is_refused(home, env, tmp_path):
     out = tmp_path / "dist" / "amemo.zip"
     assert cowork.build(env, out).path == out and cowork.is_ours(out)
-    with pytest.raises(install.InstallError, match="папка"):
+    with pytest.raises(install.InstallError, match="this is a folder"):
         cowork.build(env, tmp_path)
 
 
@@ -123,7 +123,7 @@ def test_amemo_from_a_temporary_environment_is_refused(home, env, tmp_path):
     fake.chmod(0o755)
     temp_env = {**env, "PATH": str(fake.parent), "UV_CACHE_DIR": str(cache)}
     assert cowork.ephemeral([str(fake)], temp_env)
-    with pytest.raises(install.InstallError, match="временного окружения"):
+    with pytest.raises(install.InstallError, match="temporary environment"):
         cowork.build(temp_env)
     assert not (home / cowork.FILENAME).exists()
     assert cowork.ephemeral(install.amemo_command(env)[0], env) is None

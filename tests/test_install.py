@@ -211,7 +211,7 @@ def test_claude_project_writes_mcp_json_settings_and_skills(home, env, project, 
 
 
 def test_missing_project_folder_is_an_error(env, tmp_path):
-    with pytest.raises(install.InstallError, match="папки нет"):
+    with pytest.raises(install.InstallError, match="no such folder"):
         install.install("claude-code", env, tmp_path / "nope")
 
 
@@ -296,7 +296,7 @@ def test_codex_server_amemo_outside_the_block_is_not_overwritten(home, env):
     (home / ".codex").mkdir()
     config = home / ".codex" / "config.toml"
     config.write_text('[mcp_servers.amemo]\ncommand = "mine"\n', encoding="utf-8")
-    with pytest.raises(install.InstallError, match="вне блока"):
+    with pytest.raises(install.InstallError, match="outside the block"):
         install.install("codex", env)
     assert config.read_text() == '[mcp_servers.amemo]\ncommand = "mine"\n'
     assert cli.main(["install", "codex"], env=env) == 2
@@ -360,7 +360,7 @@ def test_write_keeps_file_mode_and_writes_through_a_symlink(home, env, tmp_path)
 def test_broken_json_is_left_alone(home, env):
     (home / ".claude").mkdir()
     (home / ".claude" / "settings.json").write_text("{не json", encoding="utf-8")
-    with pytest.raises(install.InstallError, match="не JSON"):
+    with pytest.raises(install.InstallError, match="not JSON"):
         install.install("claude-code", env)
     assert (home / ".claude" / "settings.json").read_text(encoding="utf-8") == "{не json"
 
@@ -437,7 +437,7 @@ def test_file_with_bom_is_refused(home, env):
     (home / ".codex").mkdir()
     config = home / ".codex" / "config.toml"
     config.write_bytes("\ufeffmodel = 1\n".encode("utf-8"))
-    with pytest.raises(install.InstallError, match="уберите BOM"):
+    with pytest.raises(install.InstallError, match="remove the BOM"):
         install.install("codex", env)
     assert config.read_bytes() == "\ufeffmodel = 1\n".encode("utf-8")
 
@@ -468,7 +468,7 @@ def test_erased_end_mark_warns_on_uninstall_and_refuses_install(home, env):
     report = install.uninstall("codex", env)
     assert any("стёрта" in w for w in report.warnings)
     assert agents_md.read_text(encoding="utf-8") == text               # чужое без метки конца не трогается
-    with pytest.raises(install.InstallError, match="стёрта"):
+    with pytest.raises(install.InstallError, match="erased"):
         install.install("codex", env)
 
 
@@ -478,7 +478,7 @@ def test_failed_add_after_remove_restores_the_old_server(home, env, claude):
     old = {"type": "stdio", "command": "old-amemo", "args": ["mcp"], "env": {"K": "v"}}
     data["mcpServers"]["amemo"] = old
     (home / ".claude.json").write_text(json.dumps(data), encoding="utf-8")
-    with pytest.raises(install.AgentCommandError, match="возвращена"):
+    with pytest.raises(install.AgentCommandError, match="is restored"):
         install.install("claude-code", {**env, "STUB_FAIL_ADD": "model:claude-code"})
     assert [c[:2] for c in claude()] == [["mcp", "remove"], ["mcp", "add"], ["mcp", "add"]]
     assert read_json(home / ".claude.json")["mcpServers"]["amemo"] == old

@@ -65,13 +65,13 @@ def _read_json(name: str) -> dict:
     try:
         body = json.loads(raw)
     except ValueError as e:
-        raise CliError(f"{where}: не JSON: {e}", exit=USAGE, code="bad_file") from None
+        raise CliError(f"{where}: not JSON: {e}", exit=USAGE, code="bad_file") from None
     if not isinstance(body, dict):
-        raise CliError(f"{where}: нужен объект {{proposals, links?, reason?}}, как тело POST /submit", exit=USAGE,
+        raise CliError(f"{where}: an object {{proposals, links?, reason?}} is required, like the body of POST /submit", exit=USAGE,
                        code="bad_file")
     unknown = sorted(set(body) - {"proposals", "links", "reason"})
     if unknown:
-        raise CliError(f"{where}: неизвестные поля {', '.join(unknown)}; допустимы proposals, links, reason",
+        raise CliError(f"{where}: unknown fields {', '.join(unknown)}; allowed are proposals, links, reason",
                        exit=USAGE, code="bad_file")
     return body
 

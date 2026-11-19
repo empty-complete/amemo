@@ -47,7 +47,7 @@ def _path(ctx, args) -> Path:
     if args.file:
         return Path(args.file).expanduser()
     if ctx.settings.tokens is None:
-        raise CliError("файл токенов не задан", exit=USAGE, code="tokens")
+        raise CliError("the tokens file is not set", exit=USAGE, code="tokens")
     return ctx.settings.tokens
 
 
@@ -58,8 +58,8 @@ def _target(path: Path) -> Path:
         return path
     target = Path(os.path.realpath(path))
     if not target.exists():
-        raise CliError(f"{path}: ссылка на файл токенов ведёт на несуществующий {target} — создайте файл или "
-                       f"поправьте ссылку", exit=USAGE, code="tokens")
+        raise CliError(f"{path}: the link to the tokens file leads to a missing {target} — create the file or "
+                       f"fix the link", exit=USAGE, code="tokens")
     return target
 
 
@@ -76,7 +76,7 @@ def _person(ctx, what: str) -> None:
     if not ctx.is_person:
         from ... import api
 
-        raise api.Forbidden(f"токены {what} только человек (person:), а не {ctx.agent}")
+        raise api.Forbidden(f"only a person (person:) {what} tokens, not {ctx.agent}")
 
 
 def _entries(path: Path) -> list[dict]:
@@ -100,7 +100,7 @@ def _toml(value) -> str:
         return json.dumps(value, ensure_ascii=False)      # строка JSON — и базовая строка TOML
     if isinstance(value, datetime):
         return value.isoformat()
-    raise CliError(f"значение {value!r} в файле токенов не переписать: допустимы строки, числа и true/false",
+    raise CliError(f"the value {value!r} in the tokens file cannot be rewritten: strings, numbers and true/false are allowed",
                    exit=USAGE, code="tokens")
 
 
@@ -133,10 +133,10 @@ def _view(entry: dict) -> dict:
 def run_create(ctx, args) -> int:
     from ... import settings
 
-    _person(ctx, "выдаёт")
+    _person(ctx, "issues")
     agent = args.token_agent.strip()
     if not settings.AGENT.fullmatch(agent):
-        raise CliError(f"агент {agent!r}: нужен person:<имя> или model:<имя>", exit=USAGE, code="bad_agent")
+        raise CliError(f"agent {agent!r}: person:<name> or model:<name> is required", exit=USAGE, code="bad_agent")
     path = _target(_path(ctx, args))
     token = PREFIX + secrets.token_urlsafe(32)
     entry = {"hash": settings.token_hash(token), "agent": agent, "write": not args.read_only,
@@ -158,20 +158,20 @@ def run_list(ctx, args) -> int:
 
 
 def run_revoke(ctx, args) -> int:
-    _person(ctx, "отзывает")
+    _person(ctx, "revokes")
     wanted = args.token_id.strip().lower().removeprefix("sha256:")
     if len(wanted) < ID_MIN or any(ch not in "0123456789abcdef" for ch in wanted):
-        raise CliError(f"id {args.token_id!r}: нужно начало хэша из amemo token list (от {ID_MIN} знаков)",
+        raise CliError(f"id {args.token_id!r}: the start of a hash from amemo token list is required (from {ID_MIN} characters)",
                        exit=USAGE, code="usage")
     path = _target(_path(ctx, args))
     with _locked(path):
         entries = _entries(path)
         found = [e for e in entries if e["hash"].removeprefix("sha256:").startswith(wanted)]
         if not found:
-            raise CliError(f"токена {wanted} нет в {path}", exit=NOT_FOUND, code="not_found",
-                           hint="выданные токены: amemo token list")
+            raise CliError(f"no token {wanted} in {path}", exit=NOT_FOUND, code="not_found",
+                           hint="issued tokens: amemo token list")
         if len(found) > 1:
-            raise CliError(f"id {wanted}: подходит токенов {len(found)} — нужно больше знаков", exit=AMBIGUOUS,
+            raise CliError(f"id {wanted}: {len(found)} tokens match — more characters are required", exit=AMBIGUOUS,
                            code="ambiguous", candidates=[{"ref": v["id"], "label": v["agent"]}
                                                          for v in map(_view, found)])
         _write(path, [e for e in entries if e is not found[0]])

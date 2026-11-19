@@ -129,7 +129,7 @@ def test_agent_cannot_ask_for_embed_or_ocr(run, tmp_path):
         code, _, err = run("setup", "--pg-bin", str(tmp_path / "bin"), "--data", str(tmp_path / "d"), *flag,
                            extra={"CLAUDECODE": "1"})
         assert code == 2, err
-        assert "только человек" in err
+        assert "only a person" in err
     assert not (tmp_path / "d").exists()
 
 

@@ -226,10 +226,10 @@ def test_install_creates_config_0600_and_no_config_leaves_it(run, home, fetched)
 
 
 @pytest.mark.parametrize("body, exit_code, words", [
-    (ocr.DownloadError("ответ 404", 404), 4, "нет в tessdata_fast"),
-    (ocr.DownloadError("сеть недоступна"), 1, "скачать не удалось"),
-    (b"<!DOCTYPE html><html>rate limited</html>", 1, "не языковые данные"),
-    (b"", 1, "не языковые данные"),
+    (ocr.DownloadError("ответ 404", 404), 4, "in tessdata_fast"),
+    (ocr.DownloadError("сеть недоступна"), 1, "the download failed"),
+    (b"<!DOCTYPE html><html>rate limited</html>", 1, "not tesseract language data"),
+    (b"", 1, "not tesseract language data"),
 ])
 def test_install_refuses_bad_download(run, home, fetched, body, exit_code, words):
     (data_dir(home)).mkdir(parents=True)
@@ -252,7 +252,7 @@ def test_install_checks_language_codes(run, home, fetched):
 def test_model_cannot_change_installation(run, home, fetched):
     for extra in ({"CLAUDECODE": "1"}, {"AMEMO_AS_MODEL": "bot"}):
         code, _, err = run("ocr", "install", "rus", extra=extra)
-        assert code == 2 and "только человек" in err
+        assert code == 2 and "only a person" in err
         code, _, _ = run("ocr", "remove", "rus", extra=extra)
         assert code == 2
     assert fetched.calls == [] and not data_dir(home).exists()
@@ -272,7 +272,7 @@ def test_list_and_remove(run, home, fetched, monkeypatch):
         "tesseract", "tesseract", ["rus", "eng"], ["eng", "rus"])
     assert listed["tessdata"] == listed["data"] == str(data_dir(home))
     code, _, err = run("ocr", "remove", "deu")
-    assert code == 4 and "нет языков: deu" in err
+    assert code == 4 and "has no languages: deu" in err
     assert run("ocr", "remove", "eng")[0] == 0
     assert tomllib.loads(config_of(home).read_text(encoding="utf-8"))["ocr_languages"] == ["rus"]
     code, out, _ = run("ocr", "remove", "rus", "--json")

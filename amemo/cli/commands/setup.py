@@ -84,12 +84,12 @@ def prepare(ctx) -> tuple[list[str], dict, Path]:
     root = Path(store.root)
     files = conn.execute("SELECT count(*) FROM object_version WHERE digest IS NOT NULL").fetchone()[0]
     if not (root / api.STORE_MARK).is_file() and files:
-        raise CliError(f"хранилище копий не подключено: в {root} нет корня OCFL, а база знает файлов: {files}",
+        raise CliError(f"the file store is not connected: {root} has no OCFL root, but the base knows files: {files}",
                        exit=ENV, code="store_unavailable")
     try:
         store.init(create=True)
     except StoreError as e:
-        raise CliError(f"хранилище копий: {e}", exit=ENV, code="store_unavailable") from None
+        raise CliError(f"the file store: {e}", exit=ENV, code="store_unavailable") from None
     Path(ctx.settings.state).mkdir(parents=True, exist_ok=True)
     return applied, api.base(conn), root
 
@@ -164,7 +164,7 @@ def run_serve(ctx, args) -> int:
         logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     settings = settings_.load(ctx.env, host=args.host, port=args.port)
     if not settings.dsn:
-        raise CliError("база не задана", exit=ENV, code="no_dsn")
+        raise CliError("the database is not set", exit=ENV, code="no_dsn")
     kw = {"runner": ctx.runner} if ctx.runner is not None else {}
     server.serve(settings, no_auth=args.no_auth, **kw)
     return 0
@@ -181,8 +181,8 @@ def mcp_agent(ctx) -> str:
     if explicit is not None:
         explicit = explicit.strip()
         if not settings_.MODEL.fullmatch(explicit):
-            raise CliError(f"--agent {explicit!r}: amemo mcp пишет от модели — нужен model:<имя> (строчные латинские "
-                           f"буквы, цифры, «_.-»)", exit=USAGE, code="bad_agent")
+            raise CliError(f"--agent {explicit!r}: amemo mcp writes as a model — model:<name> is required (lowercase Latin "
+                           f"letters, digits, «_.-»)", exit=USAGE, code="bad_agent")
         return explicit
     detected = detected_agent(ctx.env)
     return detected[0] if detected is not None else ctx.settings.model_agent
@@ -202,14 +202,14 @@ def run_mcp(ctx, args) -> int:
     def ready(conn) -> None:
         pending = pending_migrations(conn)
         if pending is None or pending:
-            raise CliError("база не подготовлена" + (f": не применены миграции {', '.join(pending)}" if pending
-                                                    else ": в ней нет схемы amemo"), exit=ENV, code="not_ready")
+            raise CliError("the database is not prepared" + (f": migrations are not applied: {', '.join(pending)}" if pending
+                                                    else ": it has no amemo schema"), exit=ENV, code="not_ready")
 
     try:
         with mcp.open_stdio(ctx.settings, agent=agent, ready=ready) as runtime:
             mcp.serve_stdio(runtime)
     except PoolTimeout:
-        raise CliError("база недоступна: соединение не открылось", exit=ENV, code="db_unavailable") from None
+        raise CliError("the database is unavailable: the connection did not open", exit=ENV, code="db_unavailable") from None
     return 0
 
 
@@ -221,7 +221,7 @@ def run_base(ctx, args) -> int:
     conn = ctx.connect()
     if args.what is None:
         if args.name is not None:
-            raise CliError("amemo base: имя задаётся так — amemo base name ИМЯ", exit=2, code="usage")
+            raise CliError("amemo base: the name is set like this — amemo base name NAME", exit=2, code="usage")
         info = api.base(conn)
         ctx.emit(info, lambda b: f"База {b['base_id']}" + (f" «{b['name']}»" if b["name"] else "")
                  + f", amemo {b['amem_version']}\n"
