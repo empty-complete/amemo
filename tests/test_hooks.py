@@ -394,6 +394,42 @@ def test_prompt_off_the_topic_gives_no_hint_for_one_shared_word(kb, env):
     assert hooks_log(env) == ""
 
 
+def glazing_base(kb):
+    return records.commit(kb, [atom("g1", label="Безопасное заполнение витражного остекления: закалённое стекло"),
+                               atom("g2", label="Безопасное заполнение витражного остекления: триплекс"),
+                               atom("g3", label="Безопасное заполнение витражного остекления в алюминиевом профиле")],
+                          agent=AGENT).refs
+
+
+def test_prompt_on_the_subject_of_the_base_says_to_search_amemo_first(kb, env):
+    """Запрос длинный, записей с большинством его слов нет, но слова базе знакомы: одна строка «начни с amemo_search»,
+    раз за сессию — чтобы агент шёл в память сам, без напоминания человека."""
+    refs = glazing_base(kb)
+    prompt = "собери сведения про безопасные виды заполнения витражного остекления фасада"
+    first = hooks.run("UserPromptSubmit", event("UserPromptSubmit", prompt=prompt), env)
+    assert context(first, "UserPromptSubmit") == hooks.TOPIC and "amemo_search" in hooks.TOPIC
+    assert not any(ref in first for ref in refs.values())                       # записей строка не называет
+    assert hooks.run("UserPromptSubmit", event("UserPromptSubmit", prompt=prompt), env) == ""     # второй раз — молчит
+    other = event("UserPromptSubmit", prompt=prompt, session_id="s2")
+    assert context(hooks.run("UserPromptSubmit", other, env), "UserPromptSubmit") == hooks.TOPIC   # новая сессия
+    assert hooks_log(env) == ""
+
+
+def test_prompt_off_the_subject_of_the_base_gets_no_reminder(kb, env):
+    """Слов, знакомых базе, в запросе мало — строки о памяти нет; без session_id её тоже нет: нечем отметить."""
+    glazing_base(kb)
+    for prompt in ("поправь кнопку в интерфейсе настроек и проверь остекление", "какая сегодня погода в городе"):
+        assert hooks.run("UserPromptSubmit", event("UserPromptSubmit", prompt=prompt), env) == ""
+    conn = hooks._connect(env["AMEMO_DSN"])
+    try:
+        on_subject = "собери сведения про безопасные виды заполнения витражного остекления фасада"
+        assert hooks.on_topic(conn, on_subject) and not hooks.on_topic(conn, "поправь кнопку в интерфейсе")
+        assert hooks.prompt_submit(conn, on_subject) == ""
+    finally:
+        conn.close()
+    assert hooks_log(env) == ""
+
+
 def test_two_shared_words_do_not_make_a_topic(kb, env):
     """«Кнопка» и «интерфейс» редки в базе и есть в записи, но сообщение о другом: двух общих слов мало."""
     records.commit(kb, [atom("exp", label="Экспорт данных кнопкой в интерфейсе программы")], agent=AGENT)
