@@ -1450,7 +1450,10 @@ def submit(conn: psycopg.Connection, store: ObjectStore, docs: Path | None, *, a
         payload = _scrub(payload, f"{where}.payload", removed, strip=True, secrets=found)
         warnings += _private_removed(label, removed) + _secret_like(label, found)
         record_id = _scrub(proposal.get("record_id"), f"{where}.record_id", [], strip=False)
-        items.append(check.Proposal(target=target, payload=payload, record_id=record_id))
+        base = _int(proposal.get("base_revision"), f"{where}.base_revision", low=1)
+        if base is not None and record_id is None:
+            raise BadRequest(f"{where}.base_revision: only an edit (with record_id) starts from a revision")
+        items.append(check.Proposal(target=target, payload=payload, record_id=record_id, base_revision=base))
     bodies = []
     for i, link in enumerate(links):
         removed, found = [], []

@@ -194,6 +194,7 @@ class CheckCode(str, Enum):
     link_pair = "link_pair"
     retired_record = "retired_record"
     record_error = "record_error"
+    revision_stale = "revision_stale"
     source_unresolved = "source_unresolved"
     version_missing = "version_missing"
     digest_mismatch = "digest_mismatch"

@@ -223,6 +223,8 @@ enums:
         annotations: {label_ru: "запись снята", label_en: "retired record", definition_ru: "Правка записи со статусом deprecated или superseded."}
       record_error:
         annotations: {label_ru: "отказ записи", label_en: "record error", definition_ru: "Поздний отказ записи пакета."}
+      revision_stale:
+        annotations: {label_ru: "запись изменилась", label_en: "revision stale", definition_ru: "Правка начата от ревизии, которая уже не текущая: запись за это время изменили."}
       source_unresolved:
         annotations: {label_ru: "источник не разобран", label_en: "source unresolved", definition_ru: "Путь источника не разобрался."}
       version_missing:

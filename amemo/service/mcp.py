@@ -356,7 +356,7 @@ def build(runtime: Runtime) -> MCPServer:
         "вырезается. Атом: label до 80 знаков — предмет; утверждение с числами и LaTeX — в начало body; codes — "
         "обозначения; tags — сфера; объекты — в about. / Submit a batch through the check."))
     async def amemo_submit(
-            proposals: Annotated[list[dict[str, Any]], Field(description="[{target, payload, record_id?}]")],
+            proposals: Annotated[list[dict[str, Any]], Field(description="[{target, payload, record_id?, base_revision?}]; base_revision — номер ревизии из amemo_get, от которой начата правка")],
             ctx: Context,
             links: Annotated[list[dict[str, Any]] | None, Field(description="тела связей")] = None,
             reason: Annotated[str | None, Field(description="причина пакета")] = None) -> CallToolResult:
