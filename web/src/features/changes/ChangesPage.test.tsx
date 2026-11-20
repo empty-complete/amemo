@@ -29,9 +29,9 @@ test("пакет модели отменяется целиком: вопрос,
   const user = userEvent.setup();
   await renderWithApp(<ChangesPage who="all" since="ever" />, "/changes");
   const yesterday = await screen.findByRole("region", { name: "Вчера" });
-  // кнопка — одна, у пакета модели; у своих правок её нет
-  await user.click(within(yesterday).getByRole("button", { name: "Отменить пакет" }));
-  expect(screen.getAllByRole("button", { name: "Отменить пакет" })).toHaveLength(0);
+  // кнопка — одна, у пакета модели; у своих правок её нет; появляется, когда сессия загрузилась
+  await user.click(await within(yesterday).findByRole("button", { name: "Отменить пакет" }));
+  expect(screen.queryAllByRole("button", { name: "Отменить пакет" })).toHaveLength(0);
   await user.click(screen.getByRole("button", { name: "Да, отменить" }));
   expect(
     await screen.findByText("Пакет отменён: выведено 1, возвращено 0, отклонено 0, не тронуто 0"),
