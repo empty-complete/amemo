@@ -591,7 +591,11 @@ Search goes in three steps so the agent reads only what it needs: `amemo_search`
 `amemo_timeline` shows what is around a hit, and `amemo_get` returns the full records it picked. Text that matches
 several records without a clear leader comes back as `ambiguous: true` with candidates, not as the first match.
 
-**Over stdio.** `amemo mcp` runs one session per process with its own small connection pool. Claude Code:
+**Over stdio.** `amemo mcp` runs one session per process. When the service of the same base is running on this
+machine (it answers `/health` and `/api/v1/base` without a token), `amemo mcp` is a thin bridge to its `/mcp`: one
+process keeps the connection pool and the semantic search model for every agent window, and after the service
+restarts (an update) the bridge opens a new session by itself. Otherwise `amemo mcp` works on its own with a small
+connection pool; `AMEMO_MCP_BRIDGE=0` keeps it on its own always. Claude Code:
 
 ```bash
 claude mcp add amemo --env AMEMO_DSN=postgresql://amemo:amemo@127.0.0.1:5435/amemo -- amemo mcp --agent model:claude-code
