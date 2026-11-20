@@ -47,7 +47,9 @@ test("ревизия: record_id, своё свойство в qualifiers, неи
   });
   expect(proposal.record_id).toBe(A3.slice(4));
   expect(proposal.base_revision).toBeUndefined(); // черновик без ревизии — правка поверх любой текущей
-  expect(toProposal({ ...d, revision: 3 }, T("parameter"), { recordId: A3, base }).proposal.base_revision).toBe(3);
+  expect(
+    toProposal({ ...d, revision: 3 }, T("parameter"), { recordId: A3, base }).proposal.base_revision,
+  ).toBe(3);
   expect(toProposal({ ...d, revision: 3 }, T("parameter")).proposal.base_revision).toBeUndefined(); // новая запись
   expect(proposal.payload.confidence).toBe(0.82);
   expect(proposal.payload.qualifiers).toContainEqual({
