@@ -501,6 +501,30 @@ paths:
         "409": { $ref: "#/components/responses/Problem" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /changesets/{id}/revert:
+    post:
+      tags: [write]
+      operationId: revertChangeset
+      summary: "records.revert: отменить пакет изменений целиком — только человек (модель — 403 forbidden). Созданные пакетом записи выводятся из оборота, правленые получают новой ревизией прежнее тело и прежний статус, ревизии на проверке отклоняются, связи пакета выводятся; запись, которую правили после пакета, не трогается (skipped). Нет пакета — 404; пакет отклонён проверкой — 400"
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, description: "Причина отмены; без неё — «revert of <id>». Скрытое в <private>…</private> вырезается" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RevertResult" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+
   /review/enqueue:
     post:
       tags: [review]
@@ -1079,6 +1103,7 @@ components:
         retired_at: { type: string, format: date-time, description: "у link_retired" }
         from: { type: [string, "null"], description: "у folder — прежняя папка; null — запись была без папки" }
         to: { type: [string, "null"], description: "у folder — новая папка; null — запись вынута из папки" }
+        changeset: { type: string, format: uuid, description: "у revision и link_created — пакет изменений, которым это записано: его можно отменить целиком (POST /changesets/{id}/revert)" }
         changes:
           type: array
           description: "у revision — отличия тела от прежней ревизии: путь RFC 6901, before и/или after"
@@ -1086,6 +1111,27 @@ components:
             type: object
             required: [path]
             properties: { path: { type: string }, before: {}, after: {} }
+
+    RevertResult:
+      type: object
+      required: [changeset_id, reverted, retired, restored, declined, skipped, links]
+      description: "Итог отмены пакета (records.revert)"
+      properties:
+        changeset_id: { type: string, format: uuid, description: "Пакет отмены" }
+        reverted: { type: string, format: uuid, description: "Отменённый пакет" }
+        retired: { type: array, items: { type: string }, description: "Записи, созданные пакетом, — выведены из оборота" }
+        restored: { type: array, items: { type: string }, description: "Записи, которые пакет правил, — возвращено прежнее тело и статус" }
+        declined: { type: array, items: { type: string }, description: "Ревизии пакета, ждавшие проверки, — отклонены" }
+        skipped:
+          type: array
+          description: "Не тронуты: changed_later — запись правили после пакета; retired — уже выведена; declined — ревизия уже отклонена"
+          items:
+            type: object
+            required: [ref, why]
+            properties:
+              ref: { type: string }
+              why: { type: string, enum: [changed_later, retired, declined] }
+        links: { type: integer, minimum: 0, description: "Сколько связей пакета выведено из оборота" }
 
     ChangesResult:
       type: object

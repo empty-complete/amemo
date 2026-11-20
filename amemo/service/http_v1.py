@@ -351,6 +351,12 @@ async def resolve_review_item(request: Request) -> JSONResponse:
         note=body.get("note"), confidence=body.get("confidence"))))
 
 
+async def revert_changeset(request: Request) -> JSONResponse:
+    body = await _body(request)
+    return JSONResponse(await _call(request, lambda conn: api.revert_changeset(
+        conn, request.path_params["id"], agent=request.state.agent, reason=body.get("reason"))))
+
+
 async def enqueue_review(request: Request) -> JSONResponse:
     body = await _body(request)
     return JSONResponse(await _call(request, lambda conn: api.review_enqueue(
@@ -765,6 +771,7 @@ ROUTES = [
     Route(f"{API}/review/items/{{id}}", get_review_item, methods=["GET"]),
     Route(f"{API}/review/items/{{id}}/resolve", resolve_review_item, methods=["POST"]),
     Route(f"{API}/review/enqueue", enqueue_review, methods=["POST"]),
+    Route(f"{API}/changesets/{{id}}/revert", revert_changeset, methods=["POST"]),
     Route(f"{API}/review/stats", get_review_stats, methods=["GET"]),
     Route(f"{API}/tasks", list_tasks, methods=["GET"]),
     Route(f"{API}/tasks", create_task, methods=["POST"]),

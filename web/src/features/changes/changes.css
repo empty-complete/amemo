@@ -29,6 +29,24 @@
 .ev__what {
   color: var(--ink-2);
 }
+.ev__revert {
+  display: block;
+  margin-top: var(--s-2xs);
+  color: var(--muted);
+}
+button.ev__revert,
+.ev__revert button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+button.ev__revert:hover,
+.ev__revert button:hover {
+  text-decoration: underline;
+}
 .ev__rec {
   min-width: 0;
   overflow: hidden;

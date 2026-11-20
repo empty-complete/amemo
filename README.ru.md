@@ -469,6 +469,7 @@ amemo timeline REF                     что вокруг записи, шаг 
 amemo get REF...                       полные записи, шаг 3
 amemo card REF                         карточка сущности
 amemo submit FILE.json                 запись пакета (тело как у POST /submit; «-» — stdin)
+amemo revert CHANGESET                 отменить пакет целиком: созданное выводится, правки откатываются (только человек)
 amemo review list|claim|release|resolve|stats
 amemo folders tree|create|delete|rename|move
 amemo export|inspect|import FILE.zip   подборки (import без --apply — пробный)

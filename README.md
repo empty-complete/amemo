@@ -474,6 +474,7 @@ amemo timeline REF                     what is around a record, step 2
 amemo get REF...                       full records, step 3
 amemo card REF                         entity card
 amemo submit FILE.json                 write a batch (same body as POST /submit; "-" reads stdin)
+amemo revert CHANGESET                 revert a whole batch: created records retired, edits rolled back (person only)
 amemo review list|claim|release|resolve|stats
 amemo folders tree|create|delete|rename|move
 amemo export|inspect|import FILE.zip   bundles (import is a dry run without --apply)

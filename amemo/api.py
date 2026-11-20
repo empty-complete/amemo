@@ -1219,6 +1219,20 @@ def _note(note) -> str | None:
     return (private.strip(note) or None) if note is not None else None
 
 
+def revert_changeset(conn: psycopg.Connection, changeset_id, *, agent: str, reason=None) -> dict:
+    """Отменить пакет изменений целиком (records.revert); вправе только человек. Ответ — RevertResult контракта."""
+    if not isinstance(agent, str) or not agent.startswith("person:"):
+        raise Forbidden(f"only a person (person:) reverts a batch, not {agent}")
+    if isinstance(changeset_id, uuid.UUID):
+        cs = changeset_id
+    else:
+        try:
+            cs = uuid.UUID(_str(changeset_id, "id") or "")
+        except ValueError:
+            raise BadRequest(f"id {changeset_id!r}: the UUID of a changeset is required") from None
+    return records.revert(conn, cs, agent=agent, reason=_note(reason))
+
+
 def review_resolve(conn: psycopg.Connection, item_id, *, agent: str, outcome, note=None, confidence=None) -> dict:
     """Решить пункт: verification_id, статус записи после решения и id новых пунктов (queued). Права — библиотека:
     человек решает всё (confirmed, refuted), модель — только semantic, не свой пакет и с уверенностью confidence."""

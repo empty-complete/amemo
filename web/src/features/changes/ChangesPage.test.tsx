@@ -1,4 +1,5 @@
 import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "../../test/render";
 import { ChangesPage } from "./ChangesPage";
 
@@ -22,4 +23,17 @@ test("фильтр «Агенты» — только модели", async () => 
   await screen.findByRole("region", { name: "Вчера" });
   expect(screen.queryByText("anna")).not.toBeInTheDocument();
   expect(screen.getAllByText(/\(модель\)/).length).toBeGreaterThan(0);
+});
+
+test("пакет модели отменяется целиком: вопрос, затем отмена и итог", async () => {
+  const user = userEvent.setup();
+  await renderWithApp(<ChangesPage who="all" since="ever" />, "/changes");
+  const yesterday = await screen.findByRole("region", { name: "Вчера" });
+  // кнопка — одна, у пакета модели; у своих правок её нет
+  await user.click(within(yesterday).getByRole("button", { name: "Отменить пакет" }));
+  expect(screen.getAllByRole("button", { name: "Отменить пакет" })).toHaveLength(0);
+  await user.click(screen.getByRole("button", { name: "Да, отменить" }));
+  expect(
+    await screen.findByText("Пакет отменён: выведено 1, возвращено 0, отклонено 0, не тронуто 0"),
+  ).toBeInTheDocument();
 });

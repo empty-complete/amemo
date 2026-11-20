@@ -439,6 +439,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/changesets/{id}/revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** records.revert: отменить пакет изменений целиком — только человек (модель — 403 forbidden). Созданные пакетом записи выводятся из оборота, правленые получают новой ревизией прежнее тело и прежний статус, ревизии на проверке отклоняются, связи пакета выводятся; запись, которую правили после пакета, не трогается (skipped). Нет пакета — 404; пакет отклонён проверкой — 400 */
+        post: operations["revertChangeset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/review/enqueue": {
         parameters: {
             query?: never;
@@ -990,12 +1007,44 @@ export interface components {
             from?: string | null;
             /** @description у folder — новая папка; null — запись вынута из папки */
             to?: string | null;
+            /**
+             * Format: uuid
+             * @description у revision и link_created — пакет изменений, которым это записано: его можно отменить целиком (POST /changesets/{id}/revert)
+             */
+            changeset?: string;
             /** @description у revision — отличия тела от прежней ревизии: путь RFC 6901, before и/или after */
             changes?: {
                 path: string;
                 before?: unknown;
                 after?: unknown;
             }[];
+        };
+        /** @description Итог отмены пакета (records.revert) */
+        RevertResult: {
+            /**
+             * Format: uuid
+             * @description Пакет отмены
+             */
+            changeset_id: string;
+            /**
+             * Format: uuid
+             * @description Отменённый пакет
+             */
+            reverted: string;
+            /** @description Записи, созданные пакетом, — выведены из оборота */
+            retired: string[];
+            /** @description Записи, которые пакет правил, — возвращено прежнее тело и статус */
+            restored: string[];
+            /** @description Ревизии пакета, ждавшие проверки, — отклонены */
+            declined: string[];
+            /** @description Не тронуты: changed_later — запись правили после пакета; retired — уже выведена; declined — ревизия уже отклонена */
+            skipped: {
+                ref: string;
+                /** @enum {string} */
+                why: "changed_later" | "retired" | "declined";
+            }[];
+            /** @description Сколько связей пакета выведено из оборота */
+            links: number;
         };
         ChangesResult: {
             ref?: string | null;
@@ -2259,6 +2308,38 @@ export interface operations {
                 };
             };
             409: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    revertChangeset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Причина отмены; без неё — «revert of <id>». Скрытое в <private>…</private> вырезается */
+                    reason?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevertResult"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             default: components["responses"]["Problem"];
         };
     };

@@ -19,6 +19,9 @@ NO_FOLDER = "-"                     # «без папки» в move, как в �
 def register(sub, shared) -> None:
     p = add(sub, shared, "submit", "записать пакет предложений (тело как у POST /submit)", run_submit)
     p.add_argument("file", metavar="FILE.json", help="файл пакета {proposals, links?, reason?}; «-» — stdin")
+    p = add(sub, shared, "revert", "отменить пакет изменений целиком (только человек)", run_revert)
+    p.add_argument("changeset", metavar="CHANGESET", help="id пакета: changeset_id ответа записи или ленты изменений")
+    p.add_argument("--reason", help="причина отмены")
 
     _, review = group(sub, shared, "review", "очередь проверки")
     p = add(review, shared, "list", "пункты очереди", run_review_list)
@@ -175,6 +178,17 @@ def run_folders_tree(ctx, args) -> int:
     from ... import api
 
     ctx.emit(api.folder_tree(ctx.connect()), tree_text)
+    return 0
+
+
+def run_revert(ctx, args) -> int:
+    from ... import api
+
+    done = api.revert_changeset(ctx.connect(), args.changeset, agent=ctx.agent, reason=args.reason)
+    lines = [f"Пакет {done['reverted']} отменён пакетом {done['changeset_id']}: выведено {len(done['retired'])}, "
+             f"возвращено {len(done['restored'])}, отклонено {len(done['declined'])}, связей {done['links']}"]
+    lines += [f"  не тронута {s['ref']}: {s['why']}" for s in done["skipped"]]
+    ctx.emit(done, "\n".join(lines))
     return 0
 
 
