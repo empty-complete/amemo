@@ -439,7 +439,7 @@ def test_any_words_query(query, expected):
 
 # --- в пределах объекта (about) и марка с опечаткой (code_fuzzy) — приёмы omnigraph ---
 
-def entity(key, label, entity_class="building"):
+def entity(key, label, entity_class="project"):
     return Item("entity", {"ref": f"@{key}", "entity_class": entity_class, "key": key, "label": {"ru": label}})
 
 
