@@ -1449,6 +1449,8 @@ export interface operations {
                 entity_class?: components["parameters"]["EntityClass"];
                 target?: "atom" | "entity";
                 limit?: number;
+                /** @description В пределах объекта: ent:<UUID или ключ> — записи о нём и о его частях (part_of, до трёх уровней вниз). Атом — 400, нет такой сущности — 404 */
+                about?: string;
             };
             header?: never;
             path?: never;

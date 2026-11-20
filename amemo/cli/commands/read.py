@@ -21,6 +21,7 @@ def register(sub, shared) -> None:
     p.add_argument("--status", action="append", help="статус (можно несколько раз)")
     p.add_argument("--target", choices=("atom", "entity"), help="только атомы или только сущности")
     p.add_argument("--limit", type=int, help="сколько находок (1–100, по умолчанию 10)")
+    p.add_argument("--about", metavar="ent:…", help="в пределах объекта: записи о нём и о его частях")
 
     p = add(sub, shared, "timeline", "что вокруг записи (шаг 2): последние события и связи", run_timeline)
     p.add_argument("ref", metavar="REF", help="ссылка atm:/ent: или текст")
@@ -42,7 +43,7 @@ def run_search(ctx, args) -> int:
     started = time.monotonic()
     result = api.search(conn, query, agent=ctx.agent, kind=args.kind, status=args.status,
                         entity_class=args.entity_class, target=args.target, limit=args.limit,
-                        provider=ctx.provider())
+                        provider=ctx.provider(), about=args.about)
     row = conn.execute("SELECT value FROM meta WHERE key = 'base_id'").fetchone()
     journal.record(ctx.settings.query_log, recipe=result["recipe"], query=private.strip(query), agent=ctx.agent,
                    base_id=row[0] if row else None, count=len(result["items"]),

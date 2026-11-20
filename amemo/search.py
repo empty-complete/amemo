@@ -246,6 +246,33 @@ def _kind_conditions(table: str, kinds, classes, conditions: list[str], params: 
         params["classes"] = list(classes)
 
 
+SCOPE_DEPTH = 3                    # уровней part_of вниз от объекта: здание → система → изделие → деталь
+
+
+def object_scope(conn: psycopg.Connection, entity_id) -> list:
+    """Объект и его части (связи part_of к нему, вниз до SCOPE_DEPTH уровней): «в пределах объекта» — это записи
+    о нём самом и о том, из чего он состоит. Приём omnigraph — обход графа внутри поиска."""
+    rows = conn.execute(
+        "WITH RECURSIVE scope(id, depth) AS (SELECT %(root)s::uuid, 0 UNION "
+        "SELECT l.src_entity, s.depth + 1 FROM link l JOIN scope s ON l.dst_entity = s.id "
+        "WHERE l.rel = 'part_of' AND l.retired_at IS NULL AND l.src_entity IS NOT NULL AND s.depth < %(depth)s) "
+        "SELECT DISTINCT id FROM scope", {"root": entity_id, "depth": SCOPE_DEPTH}).fetchall()
+    return [row[0] for row in rows]
+
+
+def _scope_conditions(table: str, scope, conditions: list[str], params: dict) -> None:
+    """Условие «в пределах объекта» (scope — id сущностей из object_scope): атом, текущая ревизия которого о
+    какой-то из них, или сама такая сущность. None — без фильтра."""
+    if scope is None:
+        return
+    params["scope"] = list(scope)
+    if table == "atom":
+        conditions.append("EXISTS (SELECT 1 FROM atom_about ab WHERE ab.revision_id = d.revision_id "
+                          "AND ab.entity_id = ANY(%(scope)s::uuid[]))")
+    else:
+        conditions.append("d.record_id = ANY(%(scope)s::uuid[])")
+
+
 def _channel_statuses(statuses) -> tuple[str, ...]:
     if statuses is None:
         return _DEFAULT_STATUSES
@@ -264,7 +291,7 @@ def _like_prefix(value: str) -> str:
 
 
 def _lexical_channel(conn: psycopg.Connection, query: str, channel: str, *, target=None,
-                     kind=None, entity_class=None, statuses=None, exclude=None) -> list[dict]:
+                     kind=None, entity_class=None, statuses=None, exclude=None, scope=None) -> list[dict]:
     if not isinstance(query, str):
         raise ValueError("the query must be a string")
     kinds, classes = _codes(kind, "kind"), _codes(entity_class, "entity_class")
@@ -291,6 +318,7 @@ def _lexical_channel(conn: psycopg.Connection, query: str, channel: str, *, targ
         if exclude is not None:
             conditions.append("NOT (d.target = %(exclude_target)s AND d.record_id = %(exclude_record_id)s)")
         _kind_conditions(table, kinds, classes, conditions, params)
+        _scope_conditions(table, scope, conditions, params)
         if channel == "code_exact":
             source_rank = "NULL::float"
             conditions.append("EXISTS (SELECT 1 FROM search_code c WHERE c.target = d.target "
@@ -328,6 +356,51 @@ def _code_prefix(conn: psycopg.Connection, query: str, **filters) -> list[dict]:
 
 def _fts(conn: psycopg.Connection, query: str, **filters) -> list[dict]:
     return _lexical_channel(conn, query, "fts", **filters)
+
+
+FUZZY_CANDIDATES = 5               # марок-соседей, у которых ищутся записи, не больше
+FUZZY_MIN = 4                      # знаков в марке: у короткой одна правка — уже другая марка
+
+
+def _edits(a: str, b: str, limit: int) -> int:
+    """Число правок от a до b (вставка, удаление, замена, перестановка соседних знаков); больше limit — limit + 1."""
+    if abs(len(a) - len(b)) > limit:
+        return limit + 1
+    previous2, previous = None, list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        row = [i] + [0] * len(b)
+        for j, cb in enumerate(b, 1):
+            row[j] = min(previous[j] + 1, row[j - 1] + 1, previous[j - 1] + (ca != cb))
+            if previous2 is not None and i > 1 and j > 1 and ca == b[j - 2] and a[i - 2] == cb:
+                row[j] = min(row[j], previous2[j - 2] + 1)
+        if min(row) > limit:
+            return limit + 1
+        previous2, previous = previous, row
+    return previous[-1]
+
+
+def _code_fuzzy(conn: psycopg.Connection, query: str, **filters) -> list[dict] | None:
+    """Запасной ход марки с опечаткой (приём omnigraph — fuzzy): марка запроса не нашлась ни целиком, ни по
+    началу — ищутся записи с марками, до которых одна правка (у марки от 8 знаков — две): «F50.105» найдёт
+    «F50.0105». Только для запроса-марки: с цифрой и не короче FUZZY_MIN. None — ход неприменим."""
+    try:
+        code = normalize_code(query)
+    except ValueError:
+        return None
+    if len(code) < FUZZY_MIN or " " in code or not any(ch.isdigit() for ch in code):
+        return None
+    limit = 2 if len(code) >= 8 else 1
+    folded = code.casefold()
+    rows = conn.execute("SELECT DISTINCT code FROM search_code WHERE abs(length(code) - %(n)s) <= %(limit)s "
+                        "AND lower(left(code, 1)) = %(first)s",
+                        {"n": len(code), "limit": limit, "first": folded[:1]}).fetchall()
+    near = sorted((d, c) for (c,) in rows
+                  if c.casefold() != folded and (d := _edits(folded, c.casefold(), limit)) <= limit)
+    found: dict[str, dict] = {}
+    for _, candidate in near[:FUZZY_CANDIDATES]:
+        for row in _lexical_channel(conn, candidate, "code_exact", **filters):
+            found.setdefault(row["ref"], row)
+    return [{**row, "rank": rank} for rank, row in enumerate(found.values(), 1)]
 
 
 ANY_WORDS = 32                     # слов запроса в запасном ходе: длинный вопрос не становится сотней условий
@@ -387,7 +460,7 @@ def _current_embedding(conn: psycopg.Connection, target: Target, record_id, mode
 
 
 def _vector(conn: psycopg.Connection, vector, model_id, *, target=None, kind=None,
-            entity_class=None, statuses=None, exclude=None) -> list[dict]:
+            entity_class=None, statuses=None, exclude=None, scope=None) -> list[dict]:
     """Топ-50 по фактическому cosine distance среди свежих векторов активной модели."""
     kinds, classes = _codes(kind, "kind"), _codes(entity_class, "entity_class")
     targets = _channel_targets(target, kinds, classes)
@@ -415,6 +488,7 @@ def _vector(conn: psycopg.Connection, vector, model_id, *, target=None, kind=Non
         if exclude is not None:
             conditions.append("NOT (d.target = %(exclude_target)s AND d.record_id = %(exclude_record_id)s)")
         _kind_conditions(table, kinds, classes, conditions, params)
+        _scope_conditions(table, scope, conditions, params)
         selects.append(
             f"SELECT d.target, d.record_id, d.revision_id, e.vec <=> %(query_vector)s AS source_rank "
             f"FROM search_document d JOIN {table} rec ON rec.id = d.record_id "
@@ -442,7 +516,7 @@ RANKING_V1 = {
         "similar": {"vector": 2, "fts": 0.5},
     },
     # каналы, которые включаются, только когда основной ничего не дал: fts_any — «любое из слов» при пустом fts
-    "fallbacks": {"fts_any": 0.25},
+    "fallbacks": {"fts_any": 0.25, "code_fuzzy": 1},
 }
 
 
