@@ -174,6 +174,28 @@ def test_submit_edit_and_links(start, kb, store, docs):
         "уточнение"
 
 
+def test_submit_edit_from_an_old_revision_is_422_revision_stale(start, kb, store, docs):
+    """base_revision — ревизия, от которой начата правка: запись с тех пор изменили — отказ, а не тихая перезапись."""
+    first = written(kb, store, docs, fact(), agent=PERSON)
+    record_id = str(first.records[0]["record_id"])
+    written(kb, store, docs, fact(label="Кронштейн крепится к закладной двумя анкерами"), agent=PERSON,
+            record_id=first.records[0]["record_id"])
+    client = start(person=True)
+    edit = {"target": "atom", "payload": fact(label="Кронштейн крепится к закладной одним анкером"),
+            "record_id": record_id, "base_revision": 1}
+    body = problem(post_submit(client, {"proposals": [edit]}), 422, "check_rejected", "/submit", "post")
+    assert [i["code"] for i in body["issues"]] == ["revision_stale"]
+    assert kb.execute("SELECT count(*) FROM atom_revision WHERE atom_id = %s", (record_id,)).fetchone()[0] == 2
+    fresh = {**edit, "base_revision": 2}
+    assert contract.check(post_submit(client, {"proposals": [fresh]}), "/submit", "post")["records"][0]["created"]
+
+
+def test_base_revision_needs_record_id(start, kb):
+    body = problem(post_submit(start(), {"proposals": [{"target": "atom", "payload": fact(), "base_revision": 1}]}),
+                   400, "bad_request", "/submit", "post")
+    assert "base_revision" in body["detail"]
+
+
 def test_submit_rejected_is_422_with_issues_that_have_ref_and_path(start, kb):
     response = post_submit(start(), batch(fact(sources=None) | {"sources": []}, {"ref": "@b", "kind": "fact"},
                                           {"kind": "fact", "label": {"ru": "Без имени"}}))

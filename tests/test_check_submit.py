@@ -226,6 +226,29 @@ def test_edit_with_warning_moves_status_to_needs_review(kb, store, docs):
     assert [r[:2] for r in items(kb, rec["record_id"])] == [("semantic", "obsolete"), ("warning", "queued")]
 
 
+def test_edit_from_the_current_revision_goes_through(kb, store, docs):
+    rec = first(kb, store, docs, wind())
+    result = send(kb, store, docs, Proposal("atom", wind(summary_plain=lab("Давление ветра для района II.")),
+                                            rec["record_id"], base_revision=1))
+    assert result.state == "approved" and result.records[0]["created"] is True
+
+
+def test_edit_from_an_old_revision_is_rejected_and_writes_nothing(kb, store, docs):
+    """Правку начали от ревизии 1, а запись тем временем изменили: отказ revision_stale, чужая правка цела."""
+    rec = first(kb, store, docs, wind())
+    other = send(kb, store, docs, Proposal("atom", wind(summary_plain=lab("Правка другого агента.")),
+                                           rec["record_id"]), agent="model:other")
+    assert other.state == "approved"
+    stale = send(kb, store, docs, Proposal("atom", wind(summary_plain=lab("Моя правка от старой ревизии.")),
+                                           rec["record_id"], base_revision=1))
+    assert stale.state == "rejected"
+    assert ("revision_stale", "violation", "@a") in codes(stale)
+    issue = next(i for i in stale.report["issues"] if i["code"] == "revision_stale")
+    assert issue["details"] == {"base_revision": 1, "current_revision": 2}
+    assert current(kb, rec["record_id"]) == other.records[0]["revision_id"]
+    assert kb.execute("SELECT count(*) FROM atom_revision WHERE atom_id = %s", (rec["record_id"],)).fetchone()[0] == 2
+
+
 def test_edit_of_deprecated_is_rejected(kb, store, docs):
     rec = first(kb, store, docs, wind())
     records.set_status(kb, "atom", rec["record_id"], "deprecated", agent=PERSON)

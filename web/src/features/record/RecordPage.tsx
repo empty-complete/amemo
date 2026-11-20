@@ -249,7 +249,11 @@ function Note({ view: saved, mode }: { view: View; mode: RecordMode }) {
             <RecordEditor
               key={`${view.ref}-${view.revision}`}
               initial={
-                rejected?.draft ?? loadDraft(editKey) ?? fromPayload(view.payload as never, tpl, view.target)
+                rejected?.draft ??
+                loadDraft(editKey) ?? {
+                  ...fromPayload(view.payload as never, tpl, view.target),
+                  revision: view.revision,
+                }
               }
               labels={Object.fromEntries((view.about ?? []).map((a) => [a.ref, a.label]))}
               recordId={view.ref}

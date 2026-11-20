@@ -61,6 +61,7 @@ class Prepared:
     status: str | None             # статус существующей записи при чтении (не под блокировкой)
     rules: Rules | None
     ok: bool                       # тело разобралось — дальше идти можно
+    base_revision: int | None = None   # правка начата от этой ревизии (check.Proposal.base_revision)
 
 
 @dataclass
@@ -170,6 +171,7 @@ class _Level1:
         item.code = code if isinstance(code, str) else None
         if proposal.record_id is not None:
             self.existing(i, item, proposal.record_id)
+            item.base_revision = getattr(proposal, "base_revision", None)
         item.ok = self.parse(MODELS[target], payload, label)
         if item.ok:
             item.rules = self.rules(target, item.code)
