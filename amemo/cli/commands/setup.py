@@ -191,6 +191,7 @@ def mcp_agent(ctx) -> str:
 def run_mcp(ctx, args) -> int:
     from psycopg_pool import PoolTimeout
 
+    from ... import mcp_bridge
     from ...service import mcp
     from ..context import pending_migrations
 
@@ -205,12 +206,28 @@ def run_mcp(ctx, args) -> int:
             raise CliError("the database is not prepared" + (f": migrations are not applied: {', '.join(pending)}" if pending
                                                     else ": it has no amemo schema"), exit=ENV, code="not_ready")
 
+    url = mcp_bridge.find(ctx.env, ctx.settings, lambda: _base_id(ctx))
+    if url is not None:                           # служба этой базы работает — мост к её /mcp
+        import sys
+
+        mcp_bridge.serve(mcp_bridge.Bridge(url, agent, sys.stdout.buffer), sys.stdin.buffer)
+        return 0
     try:
         with mcp.open_stdio(ctx.settings, agent=agent, ready=ready) as runtime:
             mcp.serve_stdio(runtime)
     except PoolTimeout:
         raise CliError("the database is unavailable: the connection did not open", exit=ENV, code="db_unavailable") from None
     return 0
+
+
+def _base_id(ctx) -> str | None:
+    """base_id базы процесса (база подготовлена — иначе CliError); соединение сразу закрывается."""
+    conn = ctx.connect()
+    try:
+        row = conn.execute("SELECT value FROM meta WHERE key = 'base_id'").fetchone()
+    finally:
+        conn.close()
+    return row[0] if row else None
 
 
 # --- base ---
@@ -385,6 +402,8 @@ def _check_service(ctx, settings, check) -> None:
     import urllib.error
     import urllib.request
 
+    from ... import mcp_bridge
+
     url = ctx.env.get("AMEMO_URL", "").strip().rstrip("/")
     if not url:
         if settings is None:
@@ -395,7 +414,7 @@ def _check_service(ctx, settings, check) -> None:
                 pass
         except OSError:
             return                                       # служба не запущена — это не ошибка
-        url = f"http://{f'[{host}]' if ':' in host else host}:{settings.port}"
+        url = mcp_bridge.service_url(settings)
         explicit = False
     else:
         explicit = True

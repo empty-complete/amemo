@@ -550,7 +550,7 @@ def test_open_client_task_is_cut_by_idle(dsn, tmp_path):
 
 def test_stdio_subprocess_initialize_and_list_tools(env, base):
     environ = {**{k: v for k, v in os.environ.items() if not k.startswith(("AMEMO_", "CLAUDECODE", "CODEX_"))},
-               **env, "AMEMO_BACKEND": "none",
+               **env, "AMEMO_BACKEND": "none", "AMEMO_MCP_BRIDGE": "0",          # сам, без моста к службе
                "PYTHONPATH": str(Path(mcp.__file__).resolve().parents[2])}     # код этого дерева, а не установленный
     params = StdioServerParameters(command=sys.executable, args=["-m", "amemo.cli", "mcp", "--agent", "model:stdio"],
                                    env=environ)
