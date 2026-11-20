@@ -452,7 +452,7 @@ def about(key, label, *on):
 def test_exact_fact_about_searches_the_object_and_its_parts(kb):
     """about: записи о самом объекте и о его частях (part_of вниз), а не по всей базе."""
     written = records.commit(kb, [
-        entity("house", "Корпус А"), entity("facade", "Фасад корпуса А", "system"), entity("barn", "Склад"),
+        entity("house", "Корпус А"), entity("facade", "Фасад корпуса А", "artifact"), entity("barn", "Склад"),
         about("on_house", "Кронштейн корпуса", "house"), about("on_facade", "Кронштейн фасада", "facade"),
         about("on_barn", "Кронштейн склада", "barn"),
     ], [{"rel": "part_of", "src": "@facade", "dst": "@house"}], agent=AGENT)
