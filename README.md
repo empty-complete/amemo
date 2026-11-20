@@ -573,7 +573,7 @@ The MCP server gives an agent 19 tools over the same operations as the HTTP API:
 
 | Tool | What it does |
 |---|---|
-| `amemo_search(query, kind?, limit?)` | Step 1: short hits `{ref, label, kind, status, snippet}` and a `retrieval_id` |
+| `amemo_search(query, kind?, limit?, about?)` | Step 1: short hits `{ref, label, kind, status, snippet}` and a `retrieval_id`; `about: ent:…` keeps to an object and its parts; a code with a typo is still found |
 | `amemo_similar(query \| ref, limit?)` | Similar records, in the same form |
 | `amemo_timeline(ref)` | Step 2: recent events of the record and its neighbors |
 | `amemo_get(refs)` | Step 3: full records with body, sources, status and open items |

@@ -266,7 +266,7 @@ def session(conn: psycopg.Connection, *, agent: str, can_write: bool, provider=N
 # --- поиск ---
 
 def search(conn: psycopg.Connection, q, *, agent: str, kind=None, status=None, entity_class=None, target=None,
-           limit=None, provider=None, activity: uuid.UUID | None = None) -> dict:
+           limit=None, provider=None, activity: uuid.UUID | None = None, about=None) -> dict:
     """SearchResult рецепта exact_fact; выдача пишется в retrieval от имени agent (activity — задача сессии MCP:
     находки этой выдачи сессия потом отмечает helpful). Если provider не может посчитать вектор запроса, смысловой
     канал пропускается (semantic: unavailable, причина в channels.reasons.vector), а не валит поиск: марки
@@ -278,8 +278,23 @@ def search(conn: psycopg.Connection, q, *, agent: str, kind=None, status=None, e
         limit=_int(limit, "limit", low=1, high=100, default=10),
         target=_enum(target, "target", TARGETS), kind=_codes(kind, "kind"),
         entity_class=_codes(entity_class, "entity_class"), statuses=_statuses(status), provider=provider,
-        on_semantic_error="skip", lang=lang.current())
+        on_semantic_error="skip", lang=lang.current(), about=_object(conn, about))
     return _search_result(conn, result)
+
+
+def _object(conn: psycopg.Connection, about) -> uuid.UUID | None:
+    """Фильтр «в пределах объекта»: ссылка ent:<UUID или ключ> → id сущности; атом — BadRequest, нет — 404."""
+    if _str(about, "about") is None or not about.strip():
+        return None
+    try:
+        target, record_id = records.resolve(conn, about.strip())
+    except records.RecordNotFound:
+        raise
+    except records.RecordError as e:
+        raise BadRequest(f"about {about!r}: an entity ent:<UUID or key> is required ({e})") from None
+    if target != "entity":
+        raise BadRequest(f"about {about!r}: an entity ent:<UUID or key> is required, not an atom")
+    return record_id
 
 
 def similar(conn: psycopg.Connection, *, agent: str, ref=None, q=None, limit=None, provider=None,

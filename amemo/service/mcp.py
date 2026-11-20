@@ -284,11 +284,14 @@ def build(runtime: Runtime) -> MCPServer:
             ctx: Context,
             kind: Annotated[list[str] | None, Field(description="виды атомов или классы сущностей")] = None,
             limit: Annotated[int | None, Field(description="1–100, по умолчанию 10")] = None,
+            about: Annotated[str | None, Field(description=(
+                "искать в пределах объекта: ent:<UUID или ключ> — записи о нём и о его частях (part_of) / "
+                "search within an object and its parts"))] = None,
             lang: Lang = None) -> CallToolResult:
         def work(conn, caller):
             started = time.monotonic()
             result = api.search(conn, query, agent=caller.agent, kind=kind, limit=limit, provider=runtime.provider(),
-                                activity=runtime.activity(conn, caller.session))
+                                activity=runtime.activity(conn, caller.session), about=about)
             logged(conn, caller, result, query, started)
             return short(result)
         return await call(ctx, work, lang=lang)

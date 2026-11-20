@@ -127,7 +127,8 @@ def search(request: Request) -> JSONResponse:
     with connection(request) as conn:
         result = api.search(conn, q, agent=request.state.agent, kind=_many(request, "kind"),
                             status=_many(request, "status"), entity_class=_many(request, "entity_class"),
-                            target=_q(request, "target"), limit=_q(request, "limit"), provider=provider(request))
+                            target=_q(request, "target"), limit=_q(request, "limit"), provider=provider(request),
+                            about=_q(request, "about"))
     _journal(request, result, q, started)
     return JSONResponse(result)
 
