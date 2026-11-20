@@ -250,7 +250,7 @@ def what_changed(conn: psycopg.Connection, *, ref: str | None = None,
             rows = cur.execute(
                 f"SELECT r.*, p.payload AS previous_payload, p.content_hash AS previous_content_hash FROM ("
                 f"SELECT r.id, r.{t}_id AS record_id, r.n, r.payload, r.content_hash, r.valid_from, r.valid_to, "
-                f"r.recorded_at, cs.agent FROM {t}_revision r JOIN changeset cs ON cs.id = r.changeset_id "
+                f"r.recorded_at, r.changeset_id, cs.agent FROM {t}_revision r JOIN changeset cs ON cs.id = r.changeset_id "
                 f"WHERE {_history_interval('r.recorded_at', since, until)} AND {_history_who('cs.agent', who)} "
                 f"{scope} ORDER BY r.recorded_at DESC, r.id DESC LIMIT %(limit)s) r "
                 f"LEFT JOIN {t}_revision p ON p.{t}_id = r.record_id AND p.n = r.n - 1", params).fetchall()
@@ -258,6 +258,7 @@ def what_changed(conn: psycopg.Connection, *, ref: str | None = None,
                 previous = row["previous_payload"]
                 add("revision", row["id"], row["recorded_at"], ref=f"{records.PREFIX[t]}:{row['record_id']}",
                     revision=row["n"], agent=row["agent"], recorded_at=row["recorded_at"].isoformat(),
+                    changeset=str(row["changeset_id"]),
                     previous_content_hash=row["previous_content_hash"], content_hash=row["content_hash"],
                     valid_from=row["valid_from"].isoformat() if row["valid_from"] else None,
                     valid_to=row["valid_to"].isoformat() if row["valid_to"] else None,
@@ -302,7 +303,7 @@ def what_changed(conn: psycopg.Connection, *, ref: str | None = None,
             scope = ""
         ends = "l.id, l.rel, l.src_atom, l.src_entity, l.dst_atom, l.dst_entity"
         created = cur.execute(
-            f"SELECT {ends}, l.created_at AS at, l.agent FROM link l "
+            f"SELECT {ends}, l.created_at AS at, l.agent, l.changeset_id FROM link l "
             f"WHERE {_history_interval('l.created_at', since, until)} AND {_history_who('l.agent', who)} {scope} "
             "ORDER BY l.created_at DESC, l.id DESC LIMIT %(limit)s", params).fetchall()
         # вывел связь пакет retired_by — его автор, не автор связи
@@ -315,8 +316,9 @@ def what_changed(conn: psycopg.Connection, *, ref: str | None = None,
             for row in rows:
                 src = f"{'atm' if row['src_atom'] is not None else 'ent'}:{row['src_atom'] or row['src_entity']}"
                 dst = f"{'atm' if row['dst_atom'] is not None else 'ent'}:{row['dst_atom'] or row['dst_entity']}"
+                made = {"changeset": str(row["changeset_id"])} if kind == "link_created" else {}
                 add(kind, row["id"], row["at"], rel=row["rel"], src=src, dst=dst, agent=row["agent"],
-                    **{moment: row["at"].isoformat()})
+                    **{moment: row["at"].isoformat()}, **made)
 
     timed_events.sort(key=lambda item: (item[0], item[1]["type"], item[1]["id"]))
     if limit is not None:

@@ -11,6 +11,7 @@ import pytest
 import contract
 from amemo import api, check, db, folders, objects, records, review
 from amemo.check import Proposal
+from amemo.ids import uuid7
 from amemo.records import Item
 from amemo.service import http_v1
 from conftest import FakeProvider
@@ -172,6 +173,20 @@ def test_submit_edit_and_links(start, kb, store, docs):
     assert kb.execute("SELECT count(*) FROM link WHERE rel = 'depends_on'").fetchone()[0] == 1
     assert kb.execute("SELECT reason FROM changeset WHERE id = %s", (body["changeset_id"],)).fetchone()[0] == \
         "уточнение"
+
+
+def test_revert_changeset_person_only(start, kb, store, docs):
+    """POST /changesets/{id}/revert: человек отменяет пакет модели целиком; модель — 403."""
+    made = written(kb, store, docs, fact())
+    cs = made.changeset_id
+    problem(start().post(f"{V1}/changesets/{cs}/revert", json={}), 403, "forbidden", "/changesets/{id}/revert", "post")
+    body = contract.check(start(person=True).post(f"{V1}/changesets/{cs}/revert", json={"reason": "лишнее"}),
+                          "/changesets/{id}/revert", "post")
+    assert body["reverted"] == str(cs) and body["retired"] == [ref_of(made)]
+    assert kb.execute("SELECT status FROM atom WHERE id = %s", (made.records[0]["record_id"],)).fetchone()[0] == \
+        "deprecated"
+    problem(start(person=True).post(f"{V1}/changesets/{uuid7()}/revert", json={}), 404, "not_found",
+            "/changesets/{id}/revert", "post")
 
 
 def test_submit_edit_from_an_old_revision_is_422_revision_stale(start, kb, store, docs):

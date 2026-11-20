@@ -127,6 +127,18 @@ export const handlersB = (pdf: () => Promise<ArrayBuffer>) => [
     if (name !== sheet.name) return HttpResponse.json({ name, range: "A1:A1", rows: [[null]] });
     return HttpResponse.json(sheet);
   }),
+  http.post("/api/v1/changesets/:id/revert", async ({ params }) => {
+    await delay(50);
+    return HttpResponse.json({
+      changeset_id: "0193b7c2-5e1a-7d40-9f2e-0000000000c5",
+      reverted: String(params.id),
+      retired: ["atm:0193b7c2-5e1a-7d40-9f2e-000000000018"],
+      restored: [],
+      declined: [],
+      skipped: [],
+      links: 0,
+    });
+  }),
   http.get("/api/v1/changes", async ({ request }) => {
     await delay(100);
     const url = new URL(request.url);

@@ -423,7 +423,12 @@
         "unlinked": "Link removed by {{who}}"
       },
       "auto_verified": "Verified automatically"
-    }
+    },
+    "revert": "Revert the batch",
+    "revert_ask": "Revert everything this batch wrote?",
+    "revert_yes": "Yes, revert",
+    "revert_no": "No",
+    "reverted": "Batch reverted: {{retired}} retired, {{restored}} restored, {{declined}} declined, {{skipped}} left as is"
   },
   "palette": {
     "records": "Records",

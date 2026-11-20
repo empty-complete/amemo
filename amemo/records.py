@@ -667,6 +667,93 @@ def decide(conn: psycopg.Connection, target: Target, revision_id: uuid.UUID, acc
             raise RecordError(f"{PREFIX[target]}:{record_id}: {e}") from e
 
 
+REVERTED_STATUS = "deprecated"          # запись, которую создал отменённый пакет, выводится из оборота
+
+
+def revert(conn: psycopg.Connection, changeset_id, *, agent: str, reason: str | None = None) -> dict:
+    """Отменить принятый пакет изменений целиком — одним новым пакетом (приём ветки omnigraph: работу агента
+    выбрасывают разом, а не по записи). История не стирается: всё, что сделала отмена, — новые ревизии, смены
+    статуса и вывод связей от её имени.
+
+    По каждой ревизии пакета:
+    - запись создана пакетом — выводится из оборота (REVERTED_STATUS);
+    - пакет её правил — новой ревизией возвращается тело прежней действующей ревизии, и статус — тот, что был до
+      пакета;
+    - ревизия пакета ждёт проверки — отклоняется (текущей она и не была);
+    - запись после пакета правили ещё (его ревизия уже не текущая) — не трогается, попадает в skipped:
+      отмена не затирает чужую позднейшую правку.
+    Связи, созданные пакетом и ещё действующие, выводятся из оборота. Ответ: changeset_id отмены, reverted,
+    retired, restored, declined, skipped [{ref, why}], links — число выведенных связей."""
+    from . import review
+
+    _require_autocommit(conn)
+    cs = as_uuid(changeset_id, "changeset_id")
+    with conn.transaction():
+        _ensure_agent(conn, agent)
+        row = conn.execute("SELECT state, created_at FROM changeset WHERE id = %s", (cs,)).fetchone()
+        if row is None:
+            raise RecordNotFound(f"no changeset {cs}")
+        if row[0] != "approved":
+            raise RecordError(f"the changeset {cs} was rejected by the check: it wrote nothing to revert")
+        made_at = row[1]
+        revisions = []
+        for t in PREFIX:
+            revisions += [(t, *r) for r in conn.execute(
+                f"SELECT {t}_id, id, n, review_state FROM {t}_revision WHERE changeset_id = %s", (cs,)).fetchall()]
+        pairs = sorted({(t, record_id) for t, record_id, *_ in revisions}, key=lambda pair: pair[1])
+        last = _lock_many(conn, pairs)                 # порядок блокировок — как у commit: по id записи
+        at = max(_now(), last) if last is not None else _now()
+        why = reason or f"revert of {cs}"
+        new_cs = _new_changeset(conn, agent=agent, activity=None, reason=why, state="approved", check_report=None,
+                                at=at)
+        out = {"changeset_id": str(new_cs), "reverted": str(cs), "retired": [], "restored": [], "declined": [],
+               "skipped": [], "links": 0}
+        touched = []
+        for t, record_id, revision_id, n, state in sorted(revisions, key=lambda r: (str(r[1]), r[3])):
+            ref = f"{PREFIX[t]}:{record_id}"
+            if state == "declined":
+                out["skipped"].append({"ref": ref, "why": "declined"})
+                continue
+            if state == "pending":
+                conn.execute(f"UPDATE {t}_revision SET review_state = 'declined', reviewed_by = %s, reviewed_at = %s "
+                             "WHERE id = %s", (agent, at, revision_id))
+                out["declined"].append(ref)
+                touched.append((t, record_id))
+                continue
+            current = conn.execute(f"SELECT id FROM {t}_current WHERE {t}_id = %s", (record_id,)).fetchone()
+            if current is None or current[0] != revision_id:
+                out["skipped"].append({"ref": ref, "why": "changed_later"})
+                continue
+            status = conn.execute(f"SELECT status FROM {t} WHERE id = %s", (record_id,)).fetchone()[0]
+            previous = conn.execute(
+                f"SELECT payload FROM {t}_revision WHERE {t}_id = %s AND n < %s AND review_state IN ('none', 'accepted') "
+                "ORDER BY n DESC LIMIT 1", (record_id, n)).fetchone()
+            if previous is None:                       # запись создана этим пакетом
+                if status in ("deprecated", "superseded"):
+                    out["skipped"].append({"ref": ref, "why": "retired"})
+                    continue
+                set_status_locked(conn, t, record_id, REVERTED_STATUS, agent=agent, reason=why, at=at)
+                out["retired"].append(ref)
+            else:
+                plan = _Planned(Item(t, previous[0], record_id), record_id, ref, new=False)
+                _prepare_body(conn, plan, {})
+                _write_revision(conn, plan, new_cs, agent, why, at)
+                before = conn.execute(
+                    "SELECT status FROM status_log WHERE target = %s AND record_id = %s AND changed_at < %s "
+                    "ORDER BY changed_at DESC, id DESC LIMIT 1", (t, record_id, made_at)).fetchone()
+                if before is not None and before[0] != status:
+                    set_status_locked(conn, t, record_id, before[0], agent=agent, reason=why, at=at)
+                out["restored"].append(ref)
+            touched.append((t, record_id))
+        for t, record_id in touched:
+            _refresh(conn, t, record_id)
+            search.refresh_record(conn, t, record_id)
+            review.close_stale(conn, t, record_id, at=at)
+        out["links"] = conn.execute("UPDATE link SET retired_at = %s, retired_by = %s WHERE changeset_id = %s "
+                                    "AND retired_at IS NULL", (at, new_cs, cs)).rowcount
+    return out
+
+
 def retire_link(conn: psycopg.Connection, link_id: uuid.UUID, *, agent: str, reason: str) -> uuid.UUID:
     """Вывести связь из оборота отдельным пакетом изменений; сама связь остаётся в истории."""
     _require_autocommit(conn)
