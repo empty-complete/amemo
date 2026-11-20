@@ -2,7 +2,9 @@
 ui у decision и parameter (1.4.0); 1.4.1 — только заголовок «Ядро amemo»; 1.4.2 — правила названия
 и текста атома в навыке amemo-remember; 1.4.3 — в amemo-answer: короткие запросы, пока поиск по смыслу выключен;
 1.4.4 — в amemo-remember: что исправить при отказе автопроверки и что куда записывать;
-1.4.5 — в amemo-answer: сначала память — до поиска в сети и по файлам, в том числе когда собирают сведения."""
+1.4.5 — в amemo-answer: сначала память — до поиска в сети и по файлам, в том числе когда собирают сведения;
+1.4.6 — поиск внутри объекта (about) и марка с опечаткой; base_revision, revision_stale и «ответ потерялся — сначала
+проверь» в amemo-remember."""
 from amemo import packs
 from amemo.check import templates
 
@@ -14,7 +16,7 @@ def _codes(scheme):
 
 
 def test_core_version():
-    assert CORE.version == "1.4.5"
+    assert CORE.version == "1.4.6"
 
 
 def test_core_new_codes():

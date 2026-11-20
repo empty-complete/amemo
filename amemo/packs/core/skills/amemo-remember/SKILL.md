@@ -20,7 +20,8 @@ description: Record 1–3 durable findings of a finished task into the amemo kno
 
 **Как.**
 1. Дубли: `amemo_search` по марке или ключевым словам. Нашлась та же мысль — не пиши вторую: дополни найденную
-   (новая ревизия с `record_id`) или запиши только отличие и свяжи их.
+   (новая ревизия с `record_id` и `base_revision` — номером ревизии, которую ты прочитал в `amemo_get`) или запиши
+   только отличие и свяжи их.
 2. Атом: `kind` (словарь — `amemo_vocab kind`), короткий `key`, `label` и `summary_plain` (ru и en, если можешь),
    `codes`, `tags`, `about`. Поля:
    - `label` — до 80 знаков: предмет записи, что и по какому документу («Конвективный коэффициент теплообмена по
@@ -41,6 +42,10 @@ description: Record 1–3 durable findings of a finished task into the amemo kno
    и исправь, не обходи.
 5. Запись модели — черновик: её проверят человек или проверяющий (amemo-verify). Не выдавай её за проверенную.
 
+**Ответ потерялся — сначала проверь.** `amemo_submit` оборвался, истёк по времени или вернул ошибку соединения —
+пакет мог записаться. Не повторяй вслепую: найди записи `amemo_search` по ключу или марке (или `amemo_get` по
+`record_id`) и отправь только то, чего нет.
+
 **Отказ автопроверки — что исправить.** В ответе `issues`: у каждого замечания `code`, `path` и `message`.
 - `pdf_page_required`, `pdf_quote_required` — у источника из PDF нужны страница и дословная цитата не короче
   15 знаков с этой страницы. Цитату копируй из текста файла, не пересказывай.
@@ -52,6 +57,8 @@ description: Record 1–3 durable findings of a finished task into the amemo kno
 - `duplicate` — такая запись уже есть: дополни её новой ревизией (`record_id`), вторую не пиши.
 - `basis_without_rule` — `basis: default` или `assumed` без `derived_from`: добавь ссылку на правило.
 - `label_long` — название длиннее 80 знаков: утверждение перенеси в `body`.
+- `revision_stale` — запись изменили после того, как ты её прочитал: прочитай заново (`amemo_get`) и повтори
+  правку на новой ревизии, не затирая чужую.
 
 Исправь и отправь пакет снова. Не убирай источник и числа ради того, чтобы пройти проверку.
 
@@ -75,7 +82,8 @@ technique that proved itself; an open question that cannot be closed now.
 
 **How.**
 1. Duplicates: `amemo_search` by code or keywords. Same idea found — do not write a second one: extend it (new
-   revision with `record_id`) or write only the difference and link them.
+   revision with `record_id` and `base_revision` — the revision number you read with `amemo_get`) or write only
+   the difference and link them.
 2. Atom: `kind` (vocabulary — `amemo_vocab kind`), short `key`, `label` and `summary_plain` (ru and en when you
    can), `codes`, `tags`, `about`. Fields:
    - `label` — up to 80 characters: what the record is about and by which document («Convective heat transfer
@@ -97,6 +105,10 @@ technique that proved itself; an open question that cannot be closed now.
 5. A model's record is a draft until a human or the verifier (amemo-verify) reviews it. Never present it as
    verified.
 
+**The answer got lost — check first.** `amemo_submit` broke off, timed out or returned a connection error — the
+batch may have been written. Do not repeat it blindly: find the records with `amemo_search` by key or code (or
+`amemo_get` by `record_id`) and send only what is missing.
+
 **The check rejected the batch — what to fix.** The answer has `issues`; each has a `code`, a `path` and a
 `message`.
 - `pdf_page_required`, `pdf_quote_required` — a PDF source needs a page and a verbatim quote of at least
@@ -110,6 +122,8 @@ technique that proved itself; an open question that cannot be closed now.
 - `duplicate` — the record already exists: extend it with a new revision (`record_id`); do not write a second one.
 - `basis_without_rule` — `basis: default` or `assumed` without `derived_from`: add the reference to the rule.
 - `label_long` — the label is longer than 80 characters: move the claim into `body`.
+- `revision_stale` — the record changed after you read it: read it again (`amemo_get`) and redo the edit on the
+  new revision instead of overwriting someone else's.
 
 Fix it and send the batch again. Do not drop the source or the numbers just to pass the check.
 
