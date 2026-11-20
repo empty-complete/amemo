@@ -15,7 +15,8 @@ description: Answer a question or gather facts for a task from the amemo knowled
 1. **Найти.** `amemo_search` по марке или нескольким ключевым словам (не всем вопросом). Читай короткие карточки
    выдачи, не открывай всё подряд. Запомни `retrieval_id`. В ответе `semantic: unavailable` — поиск по смыслу
    сейчас не работает: ищи по одному–трём словам, марке или номеру пункта, длинная фраза найдёт только записи
-   с частью её слов.
+   с частью её слов. Вопрос об одном объекте — `about` с его ссылкой (`ent:…`): поиск идёт по нему и его частям.
+   Марка с опечаткой находится по ближайшей — проверь, та ли это марка, прежде чем на неё опираться.
 2. **Прочитать.** `amemo_get` только для нужных записей; `amemo_card` — карточка сущности (свойства из атомов),
    `amemo_similar` и `amemo_timeline` — соседи и история, если первого мало.
 3. **Ответить.** Коротко, по сути вопроса, и у каждого утверждения — откуда оно: ссылка `atm:…`, документ и место
@@ -45,7 +46,8 @@ information into a document or a report: first what memory already holds with a 
 1. **Find.** `amemo_search` by a code or a few keywords (not the whole question). Read the short result cards; do
    not open everything. Keep the `retrieval_id`. When the result says `semantic: unavailable`, semantic search is
    off right now: search by one to three words, a code or a clause number — a long phrase only finds records that
-   share some of its words.
+   share some of its words. A question about one object — `about` with its reference (`ent:…`): the search covers
+   it and its parts. A code with a typo finds the nearest one — check it is the right code before relying on it.
 2. **Read.** `amemo_get` only for the records you need; `amemo_card` for an entity card (properties from atoms),
    `amemo_similar` and `amemo_timeline` for neighbours and history when the first pass is not enough.
 3. **Answer.** Briefly, to the point, and every claim with where it comes from: the `atm:…` reference, the
