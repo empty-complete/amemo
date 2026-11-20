@@ -26,7 +26,7 @@ def kb(pg):
 
 
 def part() -> dict:
-    return {"ref": "@part", "entity_class": "product", "label": {"ru": "Кронштейн К-1"}}
+    return {"ref": "@part", "entity_class": "artifact", "label": {"ru": "Кронштейн К-1"}}
 
 
 def fact(ref="@a", label="Кронштейн К-1 держит 40 кг", about="@part") -> dict:
