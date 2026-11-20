@@ -35,10 +35,13 @@ from .report import Report
 @dataclass
 class Proposal:
     """Предложенная ревизия: новая запись, если record_id нет, иначе новая ревизия существующей.
-    Статус агент не предлагает: его ставит автопроверка."""
+    Статус агент не предлагает: его ставит автопроверка. base_revision — номер ревизии, от которой начата правка:
+    если текущая ревизия записи к моменту записи уже другая, пакет отклоняется (revision_stale), а не перезаписывает
+    чужую правку молча."""
     target: Literal["atom", "entity"]
     payload: dict
     record_id: uuid.UUID | str | None = None
+    base_revision: int | None = None
 
 
 @dataclass
@@ -79,6 +82,14 @@ class CheckError(ValueError):
     Ошибки данных агента — не исключения, а замечания отчёта."""
 
 
+class _Stale(Exception):
+    """Текущая ревизия записи уже не та, от которой начата правка (base_revision): транзакция откатывается."""
+
+    def __init__(self, item: Prepared, base: int, current: int | None):
+        super().__init__(item.label)
+        self.item, self.base, self.current = item, base, current
+
+
 class _Retired(Exception):
     """Запись вывели из оборота между уровнями проверки и блокировкой: правка невозможна, транзакция откатывается."""
 
@@ -114,6 +125,10 @@ def submit(conn: psycopg.Connection, store: ObjectStore, docs: Path | None, prop
         with conn.transaction():
             return _write(conn, batch, plans, checks, report, levels, degraded, agent=agent, activity=activity,
                           reason=reason)
+    except _Stale as e:
+        report.add(1, "violation", "revision_stale", e.item.label,
+                   f"The record changed after revision {e.base}: the current revision is {e.current} — read it again "
+                   "(amemo_get) and repeat the edit on it", base_revision=e.base, current_revision=e.current)
     except _Retired as e:
         report.add(1, "violation", "retired_record", e.item.label,
                    f"The record was retired (status {e.status}) during the check: restore its status first",
@@ -211,6 +226,10 @@ def _write(conn, batch: Batch, plans: list[_Plan], checks: dict[str, list[Source
         row = conn.execute(f"SELECT status FROM {t} WHERE id = %s FOR NO KEY UPDATE", (p.item.record_id,)).fetchone()
         if row is None:
             raise records.RecordError(f"{p.item.label}: no such record")
+        if p.item.base_revision is not None:
+            now = conn.execute(f"SELECT n FROM {t}_current WHERE {t}_id = %s", (p.item.record_id,)).fetchone()
+            if now is None or now[0] != p.item.base_revision:
+                raise _Stale(p.item, p.item.base_revision, None if now is None else now[0])
         p.owner = _owner(conn, t, p.item.record_id)
         _decide(p, row[0])
     for p in plans:

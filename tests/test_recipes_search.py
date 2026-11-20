@@ -435,3 +435,59 @@ def test_any_words_query(query, expected):
     from amemo import search
 
     assert search.any_words(query) == expected
+
+
+# --- в пределах объекта (about) и марка с опечаткой (code_fuzzy) — приёмы omnigraph ---
+
+def entity(key, label, entity_class="project"):
+    return Item("entity", {"ref": f"@{key}", "entity_class": entity_class, "key": key, "label": {"ru": label}})
+
+
+def about(key, label, *on):
+    item = atom(key, label)
+    item.payload["about"] = [f"@{o}" for o in on]
+    return item
+
+
+def test_exact_fact_about_searches_the_object_and_its_parts(kb):
+    """about: записи о самом объекте и о его частях (part_of вниз), а не по всей базе."""
+    written = records.commit(kb, [
+        entity("house", "Корпус А"), entity("facade", "Фасад корпуса А", "artifact"), entity("barn", "Склад"),
+        about("on_house", "Кронштейн корпуса", "house"), about("on_facade", "Кронштейн фасада", "facade"),
+        about("on_barn", "Кронштейн склада", "barn"),
+    ], [{"rel": "part_of", "src": "@facade", "dst": "@house"}], agent=AGENT)
+    refs = written.refs
+    house = refs["@house"].split(":", 1)[1]
+
+    scoped = search_recipe(kb, "exact_fact", "кронштейн", about=house)
+    everywhere = search_recipe(kb, "exact_fact", "кронштейн")
+
+    assert {item["ref"] for item in scoped["items"]} == {refs["@on_house"], refs["@on_facade"]}
+    assert refs["@on_barn"] in {item["ref"] for item in everywhere["items"]}
+    facade = refs["@facade"].split(":", 1)[1]
+    assert {item["ref"] for item in search_recipe(kb, "exact_fact", "кронштейн", about=facade)["items"]} == \
+        {refs["@on_facade"]}                                    # части вверх не считаются
+
+
+def test_exact_fact_finds_a_code_with_a_typo(kb):
+    written = write(kb, atom("profile", "Профиль стойки", codes=["F50.0105"]), atom("other", "Другое", codes=["G7"]))
+    profile = f"atm:{written.revisions[0].record_id}"
+
+    typo = search_recipe(kb, "exact_fact", "F50.105")
+    assert [item["ref"] for item in typo["items"]] == [profile]
+    assert "code_fuzzy" in typo["channels"]["used"]
+    assert all(match["channel"] == "code_fuzzy" for match in typo["items"][0]["matches"])
+
+    exact = search_recipe(kb, "exact_fact", "F50.0105")
+    assert "code_fuzzy" not in exact["channels"]["used"]                # нашлась целиком — запасной ход не нужен
+    assert "code_fuzzy" not in search_recipe(kb, "exact_fact", "G8")["channels"]["used"]     # короткая марка
+
+
+@pytest.mark.parametrize("a, b, limit, expected", [
+    ("f50.0105", "f50.105", 2, 1), ("f50.0105", "f50.0150", 2, 1), ("abcd", "abcd", 1, 0),
+    ("abcd", "wxyz", 1, 2), ("ab", "abcdef", 2, 3),
+])
+def test_edits_counts_insertions_substitutions_and_swaps(a, b, limit, expected):
+    from amemo import search
+
+    assert search._edits(a, b, limit) == expected

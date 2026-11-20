@@ -781,6 +781,8 @@ export interface components {
              * @description Новая запись — без record_id или null; правка существующей — её UUID
              */
             record_id?: string | null;
+            /** @description Правка: номер ревизии (revision из GET /records/{ref}), от которой она начата. Текущая ревизия к записи уже другая — пакет отклоняется с revision_stale; без поля правка ложится поверх любой текущей */
+            base_revision?: number | null;
         };
         /** @description Связь пакета /submit — LinkPayload схемы v1; лишних полей схема не принимает (отказ — 422) */
         LinkProposal: {
@@ -1496,6 +1498,8 @@ export interface operations {
                 entity_class?: components["parameters"]["EntityClass"];
                 target?: "atom" | "entity";
                 limit?: number;
+                /** @description В пределах объекта: ent:<UUID или ключ> — записи о нём и о его частях (part_of, до трёх уровней вниз). Атом — 400, нет такой сущности — 404 */
+                about?: string;
             };
             header?: never;
             path?: never;

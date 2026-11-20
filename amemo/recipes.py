@@ -334,8 +334,11 @@ def exact_fact(conn: psycopg.Connection, query: str, *, agent: str, activity=Non
                limit: int = 10, target=None, kind=None, entity_class=None, statuses=None,
                include_record: bool = False, provider: embed.EmbeddingProvider | None = None,
                usefulness: bool = True, log: bool = True, now=None, on_semantic_error: str = "raise",
-               lang: str | None = None) -> dict:
+               lang: str | None = None, about=None) -> dict:
     """Найти марку или формулировку всеми четырьмя каналами, не выбирая один «лучший» ответ.
+
+    about — id сущности: искать в пределах объекта — записи о нём и о его частях (search.object_scope).
+    Марка не нашлась ни целиком, ни по началу — запасной канал code_fuzzy (марки на одну-две правки).
 
     kind и entity_class — код строкой или несколько кодов (search._codes); log=False — выдача не пишется
     в retrieval, retrieval_id равен None. on_semantic_error — что делать, если provider не может посчитать вектор
@@ -348,7 +351,8 @@ def exact_fact(conn: psycopg.Connection, query: str, *, agent: str, activity=Non
     Когда fts пуст, а слов в запросе больше одного, канал fts_any ищет записи хотя бы с одним из слов
     (search._fts_any). Он появляется в channels.used, только если что-то нашёл: без находок ответ прежний."""
     filters = {"target": target, "kind": search._codes(kind, "kind"),
-               "entity_class": search._codes(entity_class, "entity_class"), "statuses": statuses}
+               "entity_class": search._codes(entity_class, "entity_class"), "statuses": statuses,
+               "scope": search.object_scope(conn, about) if about is not None else None}
     durations = {}
     channels = {
         "code_exact": _timed("code_exact", lambda: search._code_exact(conn, query, **filters), durations),
@@ -357,11 +361,16 @@ def exact_fact(conn: psycopg.Connection, query: str, *, agent: str, activity=Non
         "vector": None,
     }
     weights = search.RANKING_V1["recipes"]["exact_fact"]
+    if not channels["code_exact"] and not channels["code_prefix"]:
+        fuzzy = _timed("code_fuzzy", lambda: search._code_fuzzy(conn, query, **filters), durations)
+        if fuzzy:
+            channels["code_fuzzy"] = fuzzy
+            weights = {**weights, "code_fuzzy": search.RANKING_V1["fallbacks"]["code_fuzzy"]}
     if not channels["fts"]:
         loose = _timed("fts_any", lambda: search._fts_any(conn, query, **filters), durations)
         if loose:
             channels["fts_any"] = loose
-            weights = {**weights, **search.RANKING_V1["fallbacks"]}
+            weights = {**weights, "fts_any": search.RANKING_V1["fallbacks"]["fts_any"]}
     model, selected, reason = _select(conn, provider, on_semantic_error)
     if selected is not None and not query.strip():
         reason = "empty_query"

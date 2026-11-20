@@ -568,7 +568,7 @@ amemo embed status                   # активная модель, у ско�
 
 | Инструмент | Что делает |
 |---|---|
-| `amemo_search(query, kind?, limit?)` | Шаг 1: короткие находки `{ref, label, kind, status, snippet}` и `retrieval_id` |
+| `amemo_search(query, kind?, limit?, about?)` | Шаг 1: короткие находки `{ref, label, kind, status, snippet}` и `retrieval_id`; `about: ent:…` — в пределах объекта и его частей; марка с опечаткой тоже находится |
 | `amemo_similar(query \| ref, limit?)` | Похожие записи, в той же форме |
 | `amemo_timeline(ref)` | Шаг 2: последние события записи и её соседи |
 | `amemo_get(refs)` | Шаг 3: полные записи — тело, источники, статус, открытые пункты |

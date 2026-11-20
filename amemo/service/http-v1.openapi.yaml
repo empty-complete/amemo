@@ -53,6 +53,7 @@ paths:
         - { $ref: "#/components/parameters/EntityClass" }
         - { name: target, in: query, schema: { type: string, enum: [atom, entity] } }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 10 } }
+        - { name: about, in: query, schema: { type: string }, description: "В пределах объекта: ent:<UUID или ключ> — записи о нём и о его частях (part_of, до трёх уровней вниз). Атом — 400, нет такой сущности — 404" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SearchResult" } } } }
         default: { $ref: "#/components/responses/Problem" }
@@ -880,6 +881,7 @@ components:
         target: { type: string, enum: [atom, entity] }
         payload: { type: object, description: "Тело атома или сущности (AtomPayload, EntityPayload схемы v1) как есть; @имя записи для ссылок внутри пакета — в его поле ref. Статус тело не задаёт: его ставит автопроверка" }
         record_id: { type: [string, "null"], format: uuid, description: "Новая запись — без record_id или null; правка существующей — её UUID" }
+        base_revision: { type: [integer, "null"], minimum: 1, description: "Правка: номер ревизии (revision из GET /records/{ref}), от которой она начата. Текущая ревизия к записи уже другая — пакет отклоняется с revision_stale; без поля правка ложится поверх любой текущей" }
 
     LinkProposal:
       type: object

@@ -574,7 +574,7 @@ The MCP server gives an agent 19 tools over the same operations as the HTTP API:
 
 | Tool | What it does |
 |---|---|
-| `amemo_search(query, kind?, limit?)` | Step 1: short hits `{ref, label, kind, status, snippet}` and a `retrieval_id` |
+| `amemo_search(query, kind?, limit?, about?)` | Step 1: short hits `{ref, label, kind, status, snippet}` and a `retrieval_id`; `about: ent:…` keeps to an object and its parts; a code with a typo is still found |
 | `amemo_similar(query \| ref, limit?)` | Similar records, in the same form |
 | `amemo_timeline(ref)` | Step 2: recent events of the record and its neighbors |
 | `amemo_get(refs)` | Step 3: full records with body, sources, status and open items |
@@ -592,7 +592,11 @@ Search goes in three steps so the agent reads only what it needs: `amemo_search`
 `amemo_timeline` shows what is around a hit, and `amemo_get` returns the full records it picked. Text that matches
 several records without a clear leader comes back as `ambiguous: true` with candidates, not as the first match.
 
-**Over stdio.** `amemo mcp` runs one session per process with its own small connection pool. Claude Code:
+**Over stdio.** `amemo mcp` runs one session per process. When the service of the same base is running on this
+machine (it answers `/health` and `/api/v1/base` without a token), `amemo mcp` is a thin bridge to its `/mcp`: one
+process keeps the connection pool and the semantic search model for every agent window, and after the service
+restarts (an update) the bridge opens a new session by itself. Otherwise `amemo mcp` works on its own with a small
+connection pool; `AMEMO_MCP_BRIDGE=0` keeps it on its own always. Claude Code:
 
 ```bash
 claude mcp add amemo --env AMEMO_DSN=postgresql://amemo:amemo@127.0.0.1:5435/amemo -- amemo mcp --agent model:claude-code

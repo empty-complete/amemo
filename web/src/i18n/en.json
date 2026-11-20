@@ -929,6 +929,7 @@
       "link_required": "A required link is missing",
       "link_pair": "This link cannot join these records",
       "retired_record": "The record is retired: restore its status first",
+      "revision_stale": "The record changed while you were editing it: open it again and repeat the edit",
       "record_error": "The batch is not written",
       "source_unresolved": "Source not found",
       "version_missing": "The file has no such version",

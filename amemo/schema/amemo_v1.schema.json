@@ -1046,6 +1046,7 @@
         "link_pair",
         "retired_record",
         "record_error",
+        "revision_stale",
         "source_unresolved",
         "version_missing",
         "digest_mismatch",

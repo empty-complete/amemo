@@ -38,11 +38,15 @@ export interface Draft {
   sources: DraftSource[];
   basis?: "author" | "default" | "assumed";
   derived_from?: string[];
+  /** Правка: ревизия записи, от которой начат черновик. Черновик хранится и после ухода со страницы — служба
+   * сверит этот номер с текущей ревизией и откажет (revision_stale), если запись за это время изменили. */
+  revision?: number;
 }
 export interface Proposal {
   target: "atom" | "entity";
   payload: Record<string, unknown>;
   record_id: string | null;
+  base_revision?: number;
 }
 export interface LinkProposal {
   src: string;
@@ -177,7 +181,8 @@ export function toProposal(
     .map((dst) => ({ src, dst, rel: dst.startsWith("ent:") ? "about" : "see_also" }));
   // record_id в /submit — UUID записи без приставки atm:/ent: (контракт 4a)
   const recordId = opts.recordId ? opts.recordId.replace(/^(atm|ent):/, "") : null;
-  return { proposal: { target: d.target, payload, record_id: recordId }, links };
+  const base = recordId && d.revision ? { base_revision: d.revision } : {};
+  return { proposal: { target: d.target, payload, record_id: recordId, ...base }, links };
 }
 
 /** Пояснение «простыми словами» ядро требует у каждого атома (шаблон has_label). Где человек его не дал —
