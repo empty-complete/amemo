@@ -81,6 +81,17 @@ jobs:
         run: |
           npx tauri icon ../web/public/favicon.svg -o src-tauri/icons
           if ($LASTEXITCODE) { exit 1 }
+      - name: Package standalone Orca plugin
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          $zip = "$env:GITHUB_WORKSPACE/desktop/out/amemo-orca-plugin.zip"
+          git -C "$env:GITHUB_WORKSPACE" archive --format=zip --prefix=amemo-orca/ --output="$zip" HEAD:tools/orca-plugin
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $expanded = "$env:RUNNER_TEMP/orca-package"
+          Expand-Archive $zip $expanded
+          if (-not (Test-Path "$expanded/amemo-orca/orca-plugin.json" -PathType Leaf)) {
+            throw "The standalone Orca archive is missing its manifest"
+          }
       - name: tauri build (wizard pages, launcher, NSIS for the current user), version from amemo/__init__.py
         env:
           OWNER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -141,10 +152,6 @@ jobs:
           }
           $lines | Set-Content -Encoding utf8NoBOM out/version.txt
           Get-ChildItem out | Format-Table Name, Length
-      - name: Package standalone Orca plugin
-        run: |
-          git archive --format=zip --prefix=amemo-orca/ --output=out/amemo-orca-plugin.zip HEAD:tools/orca-plugin
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-windows-x64
