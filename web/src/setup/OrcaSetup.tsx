@@ -38,7 +38,11 @@ export function OrcaSetup({ bridge }: { bridge: Bridge }) {
           <p className="wz__meta">{t("orca.access")}</p>
         </div>
       )}
-      {error && <p className="wz__error" role="alert">{error}</p>}
+      {error && (
+        <p className="wz__error" role="alert">
+          {error}
+        </p>
+      )}
       <Button variant="outline" isPending={pending} onPress={() => void install()}>
         {t(result?.status === "approval" ? "orca.approve" : "orca.prepare")}
       </Button>

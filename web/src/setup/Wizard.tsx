@@ -21,7 +21,17 @@ import { setLang } from "./i18n";
 import { OrcaSetup } from "./OrcaSetup";
 import { PluginHowTo } from "./PluginHowTo";
 
-export const STEPS = ["lang", "data", "docs", "features", "agents", "install", "plugin", "orca", "done"] as const;
+export const STEPS = [
+  "lang",
+  "data",
+  "docs",
+  "features",
+  "agents",
+  "install",
+  "plugin",
+  "orca",
+  "done",
+] as const;
 export type Step = (typeof STEPS)[number];
 
 type InstallState = "idle" | "running" | "failed" | "done";
@@ -93,7 +103,11 @@ export function Wizard({ bridge, defaults }: { bridge: Bridge; defaults: Default
       const selected = choices();
       await bridge.install(selected, (p) => setProgress((all) => ({ ...all, [p.stage]: p })));
       setInstallState("done");
-      setStep(selected.agents.includes("claude") ? "plugin" : selected.agents.includes("orca") ? "orca" : "done");
+      if (selected.agents.includes("claude")) {
+        setStep("plugin");
+      } else {
+        setStep(selected.agents.includes("orca") ? "orca" : "done");
+      }
     } catch (e) {
       setInstallState("failed");
       setError(e instanceof Error ? e.message : String(e));
