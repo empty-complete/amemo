@@ -10,7 +10,11 @@ export type Lang = "ru" | "en";
 export const OCR_LANGS = ["rus", "eng"] as const;
 export type OcrLang = (typeof OCR_LANGS)[number];
 
-export type AgentId = "claude" | "codex";
+export type AgentId = "claude" | "codex" | "orca";
+
+export type OrcaInstall =
+  | { status: "installed" }
+  | { status: "approval"; fingerprint: string; access: string };
 
 /** отказ start(), когда фон на паузе */
 export const PAUSED = "paused";
@@ -98,6 +102,7 @@ export interface Bridge {
   install(choices: Choices, onProgress: (p: Progress) => void): Promise<void>;
   /** шаг «плагин»: где zip и загружен ли плагин (приложение заодно снимает прямую установку в Claude Code) */
   plugin(): Promise<PluginInfo>;
+  installOrca(approval: string | null): Promise<OrcaInstall>;
   /** открыть приложение Claude */
   openClaude(): Promise<void>;
   /** показать файл в Проводнике */
@@ -141,6 +146,7 @@ function tauriBridge(t: TauriGlobal): Bridge {
       }
     },
     plugin: () => t.core.invoke<PluginInfo>("setup_plugin"),
+    installOrca: (approval) => t.core.invoke<OrcaInstall>("setup_orca", { approval }),
     openClaude: () => t.core.invoke("setup_open_claude"),
     showFile: (path) => t.core.invoke("setup_show_file", { path }),
     finish: (options) => t.core.invoke("setup_finish", { options }),

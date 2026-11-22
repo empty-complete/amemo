@@ -19,10 +19,10 @@ on:
     paths: ["desktop/**", ".github/workflows/desktop.yml", "web/public/favicon.svg", "web/src/setup/**",
             "web/setup.html", "web/vite.setup.config.ts", "amemo/__init__.py", "amemo/cli/commands/local.py",
             "amemo/localpg.py", "amemo/agents/**", "tools/release.py", "tools/runtime.py", "tools/carousel.py",
-            "docs/assets/readme/**", ".github/workflows/runtime.yml"]
+            "docs/assets/readme/**", "tools/orca-plugin/**", ".github/workflows/runtime.yml"]
   push:
     branches: [main]
-    paths: ["desktop/**", ".github/workflows/desktop.yml", "web/src/setup/**"]
+    paths: ["desktop/**", ".github/workflows/desktop.yml", "web/src/setup/**", "tools/orca-plugin/**"]
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -141,6 +141,10 @@ jobs:
           }
           $lines | Set-Content -Encoding utf8NoBOM out/version.txt
           Get-ChildItem out | Format-Table Name, Length
+      - name: Package standalone Orca plugin
+        run: |
+          git archive --format=zip --prefix=amemo-orca/ --output=out/amemo-orca-plugin.zip HEAD:tools/orca-plugin
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-windows-x64
@@ -194,6 +198,21 @@ jobs:
           "APP_DIR=$dir" >> $env:GITHUB_ENV
           "APP_EXE=$($exe.FullName)" >> $env:GITHUB_ENV
           "UNINSTALL_KEY=$($key.PSPath)" >> $env:GITHUB_ENV
+      - name: Orca plugin is bundled in the Windows installer and available on its own
+        run: |
+          $standalone = "$env:RUNNER_TEMP\orca-package"
+          Expand-Archive "$env:SETUP\amemo-orca-plugin.zip" $standalone
+          $bundle = "$env:APP_DIR\plugins\amemo-orca"
+          $manifest = Get-Content "$bundle\orca-plugin.json" -Raw | ConvertFrom-Json
+          if ($manifest.id -ne "amemo" -or -not $manifest.main -or -not $manifest.contributes.panels) {
+            throw "Invalid amemo Orca plugin manifest"
+          }
+          foreach ($file in "orca-plugin.json", $manifest.main, $manifest.contributes.panels[0].entry,
+                            "src/protocol.ts", "src/workflows.ts") {
+            $bundledHash = (Get-FileHash "$bundle\$file" -ErrorAction Stop).Hash
+            $standaloneHash = (Get-FileHash "$standalone\amemo-orca\$file" -ErrorAction Stop).Hash
+            if ($bundledHash -ne $standaloneHash) { throw "Orca plugin file differs: $file" }
+          }
       - name: Wizard install without a window — runtime and model of this branch from a local server
         run: |
           Get-ChildItem $env:RELEASE | Format-Table Name, Length

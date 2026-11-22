@@ -22,6 +22,7 @@
 
 mod download;
 mod log;
+mod orca;
 mod paths;
 mod service;
 mod setup;
@@ -360,6 +361,7 @@ fn main() {
             setup::setup_install,
             setup::setup_finish,
             setup::setup_plugin,
+            orca::setup_orca,
             setup::setup_open_claude,
             setup::setup_show_file,
             app_start,

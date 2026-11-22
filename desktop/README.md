@@ -77,3 +77,9 @@ key per run, which checks the signing step but is useless for releases.
 Keep the private key outside the repository: losing it means installed apps can no longer be updated. A new pair
 (`npx tauri signer generate -w amemo-updater.key`) replaces both the secrets and the public key, and apps installed
 with the old public key will not accept updates signed with the new one.
+
+If **Orca IDE** is selected, the wizard offers the separate amemo plugin after
+the base is set up. Open Orca, check the permission it returns, and approve
+installation. The plugin is also distributed as `amemo-orca-plugin.zip`.
+Extract it and run `orca plugin install <path-to-amemo-orca>` to install it
+without the wizard. Orca manages the installed copy and its removal.

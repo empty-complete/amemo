@@ -18,9 +18,10 @@ import {
 import { Carousel } from "./Carousel";
 import { left, size } from "./format";
 import { setLang } from "./i18n";
+import { OrcaSetup } from "./OrcaSetup";
 import { PluginHowTo } from "./PluginHowTo";
 
-export const STEPS = ["lang", "data", "docs", "features", "agents", "install", "plugin", "done"] as const;
+export const STEPS = ["lang", "data", "docs", "features", "agents", "install", "plugin", "orca", "done"] as const;
 export type Step = (typeof STEPS)[number];
 
 type InstallState = "idle" | "running" | "failed" | "done";
@@ -36,7 +37,7 @@ function startStep(bridge: Bridge): Step {
 }
 
 /** Мастер первого запуска (спецификация приложения для Windows, п. 4–5 и 10): язык → папка данных → документы →
- * возможности → подключение → установка → плагин для приложения Claude (если выбран Claude) → готово. Всё, что касается машины, — через мост (`bridge.ts`). */
+ * возможности → подключение → установка → выбранные плагины Claude и Orca → готово. Всё, что касается машины, — через мост (`bridge.ts`). */
 export function Wizard({ bridge, defaults }: { bridge: Bridge; defaults: Defaults }) {
   const { t, i18n } = useTranslation();
   const [step, setStep] = useState<Step>(() => startStep(bridge));
@@ -91,12 +92,12 @@ export function Wizard({ bridge, defaults }: { bridge: Bridge; defaults: Default
     try {
       await bridge.install(choices(), (p) => setProgress((all) => ({ ...all, [p.stage]: p })));
       setInstallState("done");
-      setStep(choices().agents.includes("claude") ? "plugin" : "done");
+      setStep(agents.includes("claude") ? "plugin" : agents.includes("orca") ? "orca" : "done");
     } catch (e) {
       setInstallState("failed");
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [bridge, choices]);
+  }, [agents, bridge, choices]);
 
   // шаг «плагин»: сразу и раз в 15 с — загружен ли плагин (тогда же приложение снимает прямую установку)
   useEffect(() => {
@@ -124,8 +125,11 @@ export function Wizard({ bridge, defaults }: { bridge: Bridge; defaults: Default
     }
   }, [step, run]);
 
-  // шаг «плагин» — только когда выбрано приложение Claude
-  const steps = STEPS.filter((s) => s !== "plugin" || agents.includes("claude"));
+  const steps = STEPS.filter((s) => {
+    if (s === "plugin") return agents.includes("claude");
+    if (s === "orca") return agents.includes("orca");
+    return true;
+  });
   const index = steps.indexOf(step);
   const dataOk = !!check && check.ansiSafe && check.free >= check.need;
   const canNext =
@@ -274,7 +278,7 @@ export function Wizard({ bridge, defaults }: { bridge: Bridge; defaults: Default
   } else if (step === "agents") {
     body = (
       <ul className="wz__list">
-        {(["claude", "codex"] as const).map((a) => (
+        {(["claude", "codex", "orca"] as const).map((a) => (
           <li key={a} className="wz__row">
             <input
               id={`agent-${a}`}
@@ -396,6 +400,8 @@ export function Wizard({ bridge, defaults }: { bridge: Bridge; defaults: Default
         <PluginHowTo file={file} />
       </div>
     );
+  } else if (step === "orca") {
+    body = <OrcaSetup bridge={bridge} />;
   } else {
     body = (
       <>
@@ -438,6 +444,7 @@ export function Wizard({ bridge, defaults }: { bridge: Bridge; defaults: Default
     agents: t("agents.lead"),
     install: t("install.lead"),
     plugin: t("plugin.lead"),
+    orca: t("orca.lead"),
   };
   const title: Record<Step, string> = {
     lang: t("lang.title"),
@@ -447,6 +454,7 @@ export function Wizard({ bridge, defaults }: { bridge: Bridge; defaults: Default
     agents: t("agents.title"),
     install: installState === "failed" ? t("install.failed") : t("install.title"),
     plugin: t("plugin.title"),
+    orca: t("orca.title"),
     done: t("done.title"),
   };
 
@@ -495,7 +503,7 @@ export function Wizard({ bridge, defaults }: { bridge: Bridge; defaults: Default
             )}
           </div>
           <footer className="wz__foot">
-            {index > 0 && step !== "install" && step !== "plugin" && step !== "done" && (
+            {index > 0 && step !== "install" && step !== "plugin" && step !== "orca" && step !== "done" && (
               <Button variant="ghost" onPress={back}>
                 {t("nav.back")}
               </Button>

@@ -42,6 +42,7 @@ pub struct Defaults {
 struct Agents {
     claude: bool,
     codex: bool,
+    orca: bool,
 }
 
 #[derive(Serialize)]
@@ -133,7 +134,7 @@ pub fn setup_defaults(app: AppHandle, state: State<'_, crate::App>) -> Defaults 
         lang: lang(),
         data_dir: data_dir.to_string_lossy().into_owned(),
         docs_dir: dirs::document_dir().map(|d| d.to_string_lossy().into_owned()),
-        agents: Agents { claude, codex },
+        agents: Agents { claude, codex, orca: crate::orca::cli().is_some() },
         version: version(&app),
         mode: if done { "start" } else { "setup" },
     }

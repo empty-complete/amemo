@@ -174,3 +174,20 @@ test("экран запуска: ошибка и «Повторить», пау�
   await page.getByRole("button", { name: "Resume" }).click();
   await expect(page.getByRole("heading", { name: "amemo is starting" })).toBeVisible();
 });
+
+test("Orca IDE requires consent and works without the Claude step", async ({ page }) => {
+  await open(page, "step=agents&fast=1&lang=en", "light");
+  await page.getByLabel(/Claude app/).uncheck();
+  await page.getByRole("checkbox", { name: /Orca IDE/ }).check();
+  await page.getByRole("button", { name: "Install" }).click();
+
+  await expect(page.getByRole("heading", { name: "Connect Orca IDE" })).toBeVisible();
+  await expect(page.getByText("Permission requested by Orca")).toHaveCount(0);
+  await page.getByRole("button", { name: "Check plugin access" }).click();
+  await expect(page.getByText("Permission requested by Orca")).toBeVisible();
+  await axe(page);
+  await page.getByRole("button", { name: "Approve and install" }).click();
+  await expect(page.getByRole("status")).toContainText("amemo is installed in Orca IDE");
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect(page.getByRole("heading", { name: "amemo is ready" })).toBeVisible();
+});

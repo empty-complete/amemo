@@ -16,6 +16,7 @@
     "allow-setup-install",
     "allow-setup-finish",
     "allow-setup-plugin",
+    "allow-setup-orca",
     "allow-setup-open-claude",
     "allow-setup-show-file",
     "allow-app-start",
