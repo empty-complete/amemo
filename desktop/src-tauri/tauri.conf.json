@@ -59,7 +59,12 @@
       }
     },
     "resources": {
-      "../launcher/target/release/amemo.exe": "bin/amemo.exe"
+      "../launcher/target/release/amemo.exe": "bin/amemo.exe",
+      "../../tools/orca-plugin/orca-plugin.json": "plugins/amemo-orca/orca-plugin.json",
+      "../../tools/orca-plugin/src/panel.tsx": "plugins/amemo-orca/src/panel.tsx",
+      "../../tools/orca-plugin/src/protocol.ts": "plugins/amemo-orca/src/protocol.ts",
+      "../../tools/orca-plugin/src/worker.ts": "plugins/amemo-orca/src/worker.ts",
+      "../../tools/orca-plugin/src/workflows.ts": "plugins/amemo-orca/src/workflows.ts"
     }
   },
   "plugins": {

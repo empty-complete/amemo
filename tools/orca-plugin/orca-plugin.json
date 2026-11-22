@@ -1,0 +1,22 @@
+{
+  "manifestVersion": 2,
+  "id": "amemo",
+  "name": "amemo",
+  "version": "0.1.0",
+  "description": "Search amemo memory, read source quotes and prepare amemo tasks for an Orca agent.",
+  "engines": { "orca": ">=1.4.246" },
+  "execution": "trusted-worker",
+  "pluginApi": 1,
+  "main": "src/worker.ts",
+  "contributes": {
+    "panels": [
+      {
+        "id": "amemo",
+        "title": "amemo",
+        "icon": "database",
+        "entry": "src/panel.tsx",
+        "ui": "components"
+      }
+    ]
+  }
+}

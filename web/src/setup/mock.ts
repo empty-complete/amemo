@@ -32,7 +32,7 @@ export function mockBridge(params: URLSearchParams): Bridge {
         dataDir:
           params.get("nonansi") === "1" ? "C:\\Users\\Анна\\amemo-data" : "C:\\Users\\anna\\amemo-data",
         docsDir: "C:\\Users\\anna\\Documents",
-        agents: { claude: true, codex: false },
+        agents: { claude: true, codex: false, orca: params.get("orca") === "1" },
         version: "0.1.0a2",
         mode: params.get("start") ? "start" : "setup",
       };
@@ -83,6 +83,15 @@ export function mockBridge(params: URLSearchParams): Bridge {
     },
     async plugin() {
       return { path: "C:\\Users\\anna\\Downloads\\amemo-plugin.zip", synced: params.get("synced") === "1" };
+    },
+    async installOrca(approval) {
+      await wait(250);
+      if (approval === "ap1-mock") return { status: "installed" };
+      return {
+        status: "approval",
+        fingerprint: "ap1-mock",
+        access: "Runs a local Node.js worker with your user account’s access.",
+      };
     },
     async openClaude() {},
     async showFile() {},

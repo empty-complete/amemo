@@ -13,6 +13,7 @@
     "features": "Features",
     "agents": "Connect",
     "install": "Install",
+    "orca": "Orca IDE",
     "done": "Done",
     "plugin": "Plugin"
   },
@@ -65,6 +66,8 @@
     "claudeNote": "Cowork and Claude Code: the amemo server, skills and hooks. At the end the wizard shows where to upload the plugin.",
     "codex": "Codex",
     "codexNote": "The amemo server and instructions in AGENTS.md.",
+    "orca": "Orca IDE",
+    "orcaNote": "A sidebar for searching memory, reading sources and checking the review queue.",
     "found": "found on this computer",
     "notFound": "not found"
   },
@@ -145,6 +148,15 @@
       "download": "Downloading the new amemo runtime.",
       "migrate": "Moving the base to the new version. If anything goes wrong, amemo returns to the previous one."
     }
+  },
+  "orca": {
+    "title": "Connect Orca IDE",
+    "lead": "Open Orca IDE, then install the bundled amemo plugin. You can also finish setup and install it later.",
+    "prepare": "Check plugin access",
+    "permission": "Permission requested by Orca",
+    "access": "The amemo panel reads the local amemo service on port 8767.",
+    "approve": "Approve and install",
+    "installed": "amemo is installed in Orca IDE. Open the amemo panel in its right sidebar."
   },
   "plugin": {
     "title": "Connect the Claude app",

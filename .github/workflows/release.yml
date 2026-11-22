@@ -164,9 +164,10 @@ jobs:
           setup="amemo-setup-$VERSION-windows-x64.exe"
           cp "desktop-out/amemo_${app}_x64-setup.exe" "assets/$setup"
           cp "desktop-out/amemo_${app}_x64-setup.exe.sig" "assets/$setup.sig"
+          cp desktop-out/amemo-orca-plugin.zip assets/
           cp runtime-out/amemo-runtime-*.zip runtime-out/amemo-model-*.zip assets/
           ls assets/amemo-runtime-"$VERSION"-windows-x64.zip       # комплект этой версии — его качает мастер
-          (cd assets && for f in "$setup" amemo-runtime-*.zip amemo-model-*.zip; do sha256sum "$f" > "$f.sha256"; done)
+          (cd assets && for f in "$setup" amemo-orca-plugin.zip amemo-runtime-*.zip amemo-model-*.zip; do sha256sum "$f" > "$f.sha256"; done)
           mkdir -p updates
           cp "assets/$setup" updates/amemo-setup-windows-x64.exe
           python tools/release.py latest --setup "assets/$setup" --version "$VERSION" \
@@ -189,6 +190,7 @@ jobs:
           - **Windows:** [amemo-setup-$VERSION-windows-x64.exe](https://github.com/$GH_REPO/releases/download/$TAG/amemo-setup-$VERSION-windows-x64.exe)
             — installs for the current user, no administrator rights. Windows SmartScreen may say the app is not
             recognised: **More info → Run anyway** (the installer is not code-signed yet).
+          - **Orca IDE:** [amemo-orca-plugin.zip](https://github.com/$GH_REPO/releases/download/$TAG/amemo-orca-plugin.zip). Extract and install the folder with Orca CLI, or use the Windows wizard.
           - **Linux, macOS, servers:** \`pipx install --force "amemo[web]==$VERSION"\`
           EOF
           gh release create "$TAG" dist/* assets/* --verify-tag --title "amemo $VERSION" --generate-notes --latest \

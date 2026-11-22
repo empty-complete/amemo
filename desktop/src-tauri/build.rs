@@ -7,6 +7,7 @@ const COMMANDS: &[&str] = &[
     "setup_install",
     "setup_finish",
     "setup_plugin",
+    "setup_orca",
     "setup_open_claude",
     "setup_show_file",
     "app_start",
