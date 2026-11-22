@@ -151,6 +151,34 @@ jobs:
           path: desktop/out/
           retention-days: 14
 
+  orca-plugin:
+    if: ${{ !inputs.release }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Validate and test the plugin with Orca
+        shell: pwsh
+        run: |
+          $installer = "$env:RUNNER_TEMP\orca-setup.exe"
+          Invoke-WebRequest -Uri "https://github.com/stablyai/orca/releases/download/v1.4.269/orca-windows-setup.exe" -OutFile $installer
+          $hash = (Get-FileHash $installer -Algorithm SHA256).Hash
+          if ($hash -ne "20fdbd6ffaceb0a59e32c1bba0551d2b57684470fd5827d3f6d3c9d47afab08b") {
+            throw "Orca installer checksum mismatch"
+          }
+          $setup = Start-Process $installer -ArgumentList "/S", "/currentuser" -PassThru
+          if (-not $setup.WaitForExit(120000) -or $setup.ExitCode) { throw "Orca installer failed" }
+          $orca = "$env:LOCALAPPDATA\Programs\orca\resources\bin\orca.exe"
+          $plugin = "$env:GITHUB_WORKSPACE\tools\orca-plugin"
+          & $orca plugin validate $plugin --json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & $orca plugin test $plugin --json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & $orca plugin check $plugin --json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
   runtime:
     uses: ./.github/workflows/runtime.yml
 

@@ -90,14 +90,15 @@ export function Wizard({ bridge, defaults }: { bridge: Bridge; defaults: Default
     setError(null);
     setProgress({});
     try {
-      await bridge.install(choices(), (p) => setProgress((all) => ({ ...all, [p.stage]: p })));
+      const selected = choices();
+      await bridge.install(selected, (p) => setProgress((all) => ({ ...all, [p.stage]: p })));
       setInstallState("done");
-      setStep(agents.includes("claude") ? "plugin" : agents.includes("orca") ? "orca" : "done");
+      setStep(selected.agents.includes("claude") ? "plugin" : selected.agents.includes("orca") ? "orca" : "done");
     } catch (e) {
       setInstallState("failed");
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [agents, bridge, choices]);
+  }, [bridge, choices]);
 
   // шаг «плагин»: сразу и раз в 15 с — загружен ли плагин (тогда же приложение снимает прямую установку)
   useEffect(() => {
